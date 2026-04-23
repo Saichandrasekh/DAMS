@@ -1,0 +1,170 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Bulk Marks Entry{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'teacher/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="card mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+            <label class="block text-xs font-semibold uppercase text-muted mb-1">Select Exam</label>
+            <select id="exam-select" class="card w-full p-2 border-border bg-slate-50">
+                <option value="">-- Choose Exam --</option>
+                {% for exam in exams %}
+                <option value="{{ exam.id }}">{{ exam.name }} ({{ exam.academic_year }})</option>
+                {% endfor %}
+                {% if not exams %}
+                <option disabled>No exams created yet (Contact Admin)</option>
+                {% endif %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase text-muted mb-1">Select Class & Subject</label>
+            <select id="class-subject-select" class="card w-full p-2 border-border bg-slate-50">
+                <option value="">-- Choose Class --</option>
+                {% for c in classes %}
+                <option value="{{ c.id }}-{{ c.subject_id }}">{{ c.name }}{{ c.section }} - {{ c.subject_name }}
+                </option>
+                {% endfor %}
+                {% if not classes %}
+                <option disabled>No subjects assigned to you</option>
+                {% endif %}
+            </select>
+        </div>
+        <div class="flex items-end">
+            <button onclick="loadStudents()" class="btn btn-primary w-full">
+                <i class="fas fa-users"></i> Load Students
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="entry-container" class="hidden animate-slide-up">
+    <div class="card p-0 overflow-hidden">
+        <table class="w-full text-left border-collapse" id="marks-table">
+            <thead class="bg-slate-50 border-b border-border">
+                <tr>
+                    <th class="p-4 font-semibold text-sm">Roll No</th>
+                    <th class="p-4 font-semibold text-sm">Student Name</th>
+                    <th class="p-4 font-semibold text-sm w-32">Marks</th>
+                    <th class="p-4 font-semibold text-sm">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Rows injected by JS -->
+            </tbody>
+        </table>
+    </div>
+
+    <div class="flex justify-end mt-6">
+        <button onclick="saveMarks()" id="save-btn" class="btn btn-primary btn-lg shadow-lg">
+            <i class="fas fa-save"></i> Save All Results
+        </button>
+    </div>
+</div>
+
+<script>
+    async function loadStudents() {
+        const examId = document.getElementById('exam-select').value;
+        const val = document.getElementById('class-subject-select').value;
+        if (!examId || !val) {
+            showToast('Please select both Exam and Class', 'error');
+            return;
+        }
+        const [classId, subjectId] = val.split('-');
+
+        try {
+            const res = await fetch(`/teacher/get-exam-students/${classId}/${subjectId}/${examId}`);
+            const students = await res.json();
+
+            const tbody = document.querySelector('#marks-table tbody');
+            tbody.innerHTML = '';
+
+            students.forEach(s => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                <td class="p-4 border-b border-border font-medium">${s.roll_no || '-'}</td>
+                <td class="p-4 border-b border-border">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        ${s.name}
+                    </div>
+                </td>
+                <td class="p-4 border-b border-border">
+                    <input type="number" step="0.1" class="mark-input card p-2 w-full text-center border-border" 
+                           value="${s.marks}" data-sid="${s.id}" placeholder="0-100">
+                </td>
+                <td class="p-4 border-b border-border">
+                    <input type="text" class="remark-input card p-2 w-full border-border" 
+                           value="${s.remarks}" placeholder="Optional notes...">
+                </td>
+            `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('entry-container').classList.remove('hidden');
+        } catch (e) {
+            showToast('Error loading students', 'error');
+        }
+    }
+
+    async function saveMarks() {
+        const btn = document.getElementById('save-btn');
+        const examId = document.getElementById('exam-select').value;
+        const val = document.getElementById('class-subject-select').value;
+        const [classId, subjectId] = val.split('-');
+
+        const records = [];
+        document.querySelectorAll('#marks-table tbody tr').forEach(tr => {
+            const marks = tr.querySelector('.mark-input').value;
+            if (marks !== "") {
+                records.push({
+                    student_id: tr.querySelector('.mark-input').dataset.sid,
+                    marks: parseFloat(marks),
+                    remarks: tr.querySelector('.remark-input').value
+                });
+            }
+        });
+
+        if (records.length === 0) {
+            showToast('No marks entered to save', 'warning');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+        try {
+            const res = await fetch('/teacher/marks-entry', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    exam_id: examId,
+                    subject_id: subjectId,
+                    records: records
+                })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Results Saved!',
+                text: data.message,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } catch (e) {
+            showToast(e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Save All Results';
+        }
+    }
+</script>
+{% endblock %}

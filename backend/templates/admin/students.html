@@ -1,0 +1,158 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Manage Students{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'admin/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="flex justify-between items-center mb-6">
+    <div class="flex gap-4">
+        <a href="{{ url_for('admin.add_student') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Add Student
+        </a>
+        <button class="btn" style="border: 1px solid var(--border);"
+            onclick="document.getElementById('import-form').classList.toggle('hidden')">
+            <i class="fas fa-file-import"></i> Bulk Import
+        </button>
+        <form action="{{ url_for('admin.purge_inactive_students') }}" method="POST" style="display: inline;">
+            <button type="button" class="btn btn-outline" style="color: var(--danger); border-color: var(--danger);"
+                data-confirm="Are you sure you want to PERMANENTLY delete all inactive students? This action cannot be undone."
+                data-title="Purge Inactive Students">
+                <i class="fas fa-eraser"></i> Delete All Inactive
+            </button>
+        </form>
+    </div>
+    <form method="GET" class="flex gap-4">
+        <div style="position: relative;">
+            <i class="fas fa-search" style="position: absolute; left: 12px; top: 12px; color: var(--text-muted);"></i>
+            <input type="text" id="student-search" class="card"
+                style="padding: 10px 10px 10px 40px; border: 1px solid var(--border); width: 200px;"
+                placeholder="Search students...">
+        </div>
+        <select name="class_id" class="card" style="padding: 10px; border: 1px solid var(--border); width: 180px;"
+            onchange="this.form.submit()">
+            <option value="">All Classes</option>
+            {% for cls in classes %}
+            <option value="{{ cls.id }}" {% if filters.class_id==cls.id|string %}selected{% endif %}>
+                {{ cls.name }} - {{ cls.section }}
+            </option>
+            {% endfor %}
+        </select>
+        <select name="status" id="status-filter" class="card"
+            style="padding: 10px; border: 1px solid var(--border); width: 140px;" onchange="this.form.submit()">
+            <option value="all">All Status</option>
+            <option value="active" {% if filters.status=='active' %}selected{% endif %}>Active Only</option>
+            <option value="inactive" {% if filters.status=='inactive' %}selected{% endif %}>Inactive Only</option>
+        </select>
+    </form>
+</div>
+
+<div id="import-form" class="card mb-6 hidden" style="background: #f8fafc; border: 1px dashed var(--primary);">
+    <h4 class="mb-2">Import Students from CSV</h4>
+    <p class="text-xs text-muted mb-4">Upload a CSV file with columns: name, email, phone, roll_no, class_id</p>
+    <form action="{{ url_for('admin.import_students') }}" method="POST" enctype="multipart/form-data"
+        class="flex gap-4">
+        <input type="file" name="csv_file" accept=".csv" required style="font-size: 0.875rem;">
+        <button type="submit" class="btn btn-primary btn-sm">Upload & Process</button>
+    </form>
+</div>
+
+<div class="card">
+    <div style="overflow-x: auto;">
+        <table id="students-table">
+            <thead>
+                <tr>
+                    <th>Roll No</th>
+                    <th>Name</th>
+                    <th>Class</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Password</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for student in students %}
+                <tr data-status="{{ 'active' if student.is_active else 'inactive' }}">
+                    <td><span style="font-weight: 600;">{{ student.roll_no or '-' }}</span></td>
+                    <td>
+                        <div class="flex items-center gap-3">
+                            <div
+                                style="width: 32px; height: 32px; background: #e2e8f0; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-user-graduate" style="font-size: 0.75rem;"></i>
+                            </div>
+                            <span>{{ student.name }}</span>
+                        </div>
+                    </td>
+                    <td>{{ student.class_name }} - {{ student.section }}</td>
+                    <td>{{ student.email }}</td>
+                    <td>{{ student.phone or '-' }}</td>
+                    <td>
+                        {% if student.original_password %}
+                        <code
+                            style="background:#f1f5f9; padding:2px 4px; border-radius:4px; font-family:monospace; font-size:0.8rem;">{{ student.original_password }}</code>
+                        {% else %}
+                        <span class="text-xs text-muted"><em>Not stored</em></span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if student.is_active %}
+                        <span class="badge badge-present"
+                            style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:12px; font-size:0.75rem;">Active</span>
+                        {% else %}
+                        <span class="badge badge-absent"
+                            style="background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:12px; font-size:0.75rem;">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="flex gap-3">
+                            <a href="{{ url_for('admin.edit_student', student_id=student.id) }}"
+                                class="text-muted hover:text-primary" title="Edit Student">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <form
+                                action="{{ url_for('admin.delete_student', student_id=student.id, class_id=filters.class_id, status=filters.status) }}"
+                                method="POST">
+                                <button type="button" data-confirm="Are you sure you want to archive this student?"
+                                    data-title="Archive Student"
+                                    style="background: none; border: none; padding: 0; cursor: pointer;">
+                                    <i class="fas fa-trash text-muted hover:text-danger"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not students %}
+                <tr>
+                    <td colspan="7" class="text-center py-8 text-muted">No students found. Add one to get started.</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+    .hidden {
+        display: none;
+    }
+</style>
+
+<script>
+    function filterStudents() {
+        let searchValue = document.getElementById('student-search').value.toLowerCase();
+        let rows = document.querySelectorAll('#students-table tbody tr:not(.empty-row)');
+
+        rows.forEach(row => {
+            let matchesSearch = row.innerText.toLowerCase().includes(searchValue);
+            row.style.display = matchesSearch ? '' : 'none';
+        });
+    }
+
+    document.getElementById('student-search').addEventListener('keyup', filterStudents);
+</script>
+{% endblock %}

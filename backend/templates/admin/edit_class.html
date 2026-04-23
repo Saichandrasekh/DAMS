@@ -1,0 +1,47 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Edit Class: {{ cls.name }} - {{ cls.section }}{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'admin/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div style="max-width: 600px; margin: 0 auto;">
+    <div class="card">
+        <form action="{{ url_for('admin.edit_class', class_id=cls.id) }}" method="POST">
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Class Name *</label>
+                <input type="text" name="name" value="{{ cls.name }}"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;" required>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Section *</label>
+                <input type="text" name="section" value="{{ cls.section }}"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;" required>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Academic Year</label>
+                <input type="text" name="academic_year" value="{{ cls.academic_year or '' }}"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+            </div>
+            <div class="mb-6">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Class Teacher</label>
+                <select name="class_teacher_id"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                    <option value="">Select a Teacher</option>
+                    {% for t in teachers %}
+                    <option value="{{ t.id }}" {% if cls.class_teacher_id==t.id %}selected{% endif %}>{{ t.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex gap-3">
+                <button type="submit" class="btn btn-primary" style="flex: 1;">Update Class</button>
+                <a href="{{ url_for('admin.classes') }}" class="btn btn-outline"
+                    style="flex: 1; text-align: center;">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

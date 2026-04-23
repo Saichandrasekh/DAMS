@@ -1,0 +1,239 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Mark Student Attendance{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'teacher/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="card mb-6">
+    <div class="flex gap-4 items-end">
+        <div style="flex: 1;">
+            <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Select Class & Subject</label>
+            <select id="class-subject-select" class="card"
+                style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                <option value="">-- Choose Class --</option>
+                {% for c in classes %}
+                <option value="{{ c.id }}_{{ c.subject_id }}">{{ c.name }} - {{ c.section }} ({{ c.subject_name }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="width: 200px;">
+            <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Date</label>
+            <input type="date" id="attendance-date" value="{{ date or today }}" class="card"
+                style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+        </div>
+        <div style="width: 120px;">
+            <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Period</label>
+            <select id="period-no" class="card"
+                style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                {% for i in range(1, 9) %}<option value="{{ i }}">{{ i }}</option>{% endfor %}
+            </select>
+        </div>
+        <button id="load-btn" class="btn btn-primary" style="padding: 10px 24px;">Load List</button>
+    </div>
+</div>
+
+<div id="attendance-card" class="card hidden">
+    <div class="flex justify-between items-center mb-6">
+        <h3 id="class-title">Student List</h3>
+        <div class="flex gap-4 items-center">
+            <select id="status-filter" class="card"
+                style="padding: 6px 12px; border: 1px solid var(--border); font-size: 0.875rem;">
+                <option value="all">All Students</option>
+                <option value="active" selected>Active Only</option>
+                <option value="inactive">Inactive Only</option>
+            </select>
+            <div class="flex gap-2">
+                <button class="btn btn-sm" style="background: #dcfce7; color: #166534;" onclick="markAll('present')">All
+                    Present</button>
+                <button class="btn btn-sm" style="background: #fee2e2; color: #991b1b;" onclick="markAll('absent')">All
+                    Absent</button>
+            </div>
+        </div>
+    </div>
+
+    <div style="overflow-x: auto;">
+        <table id="attendance-table">
+            <thead>
+                <tr>
+                    <th style="width: 80px;">Roll No</th>
+                    <th>Student Name</th>
+                    <th style="text-align: center;">Status</th>
+                    <th>Remarks</th>
+                </tr>
+            </thead>
+            <tbody id="student-list-body">
+                <!-- Rows dynamically added -->
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mt-8 flex justify-end">
+        <button id="save-btn" class="btn btn-primary" style="padding: 14px 40px; font-size: 1rem;">
+            <i class="fas fa-save"></i> Save Attendance
+        </button>
+    </div>
+</div>
+
+<style>
+    .hidden {
+        display: none;
+    }
+
+    .status-group {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+    }
+
+    .status-opt {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: 2px solid #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 0.75rem;
+        transition: all 0.2s;
+    }
+
+    .status-opt[data-val="present"].active {
+        background: var(--success);
+        color: white;
+        border-color: var(--success);
+    }
+
+    .status-opt[data-val="absent"].active {
+        background: var(--danger);
+        color: white;
+        border-color: var(--danger);
+    }
+
+    .status-opt[data-val="late"].active {
+        background: var(--warning);
+        color: white;
+        border-color: var(--warning);
+    }
+
+    .row-inactive {
+        opacity: 0.6;
+        background: #f8fafc;
+    }
+
+    .badge-inactive {
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.65rem;
+        margin-left: 8px;
+    }
+</style>
+
+<script>
+    let currentStudents = [];
+
+    document.getElementById('load-btn').addEventListener('click', async function () {
+        const selValue = document.getElementById('class-subject-select').value;
+        if (!selValue) return alert('Select class/subject');
+
+        const [classId, subjectId] = selValue.split('_');
+        const date = document.getElementById('attendance-date').value;
+        const period = document.getElementById('period-no').value;
+
+        const res = await fetch(`{{ url_for('teacher.get_students', class_id=0, subject_id=0) }}`.replace('0/0', `${classId}/${subjectId}`) + `?date=${date}&period=${period}`);
+        currentStudents = await res.json();
+
+        renderStudents();
+        document.getElementById('attendance-card').classList.remove('hidden');
+    });
+
+    document.getElementById('status-filter').addEventListener('change', renderStudents);
+
+    function renderStudents() {
+        const body = document.getElementById('student-list-body');
+        const statusLimit = document.getElementById('status-filter').value;
+        body.innerHTML = '';
+
+        currentStudents.forEach(s => {
+            const studentStatus = s.is_active ? 'active' : 'inactive';
+            if (statusLimit !== 'all' && statusLimit !== studentStatus) return;
+
+            const tr = document.createElement('tr');
+            if (!s.is_active) tr.className = 'row-inactive';
+
+            tr.innerHTML = `
+                <td>${s.roll_no || '-'}</td>
+                <td style="font-weight: 500;">
+                    ${s.name}
+                    ${!s.is_active ? '<span class="badge-inactive">Inactive</span>' : ''}
+                </td>
+                <td>
+                    <div class="status-group">
+                        <div class="status-opt ${s.status === 'present' ? 'active' : ''}" data-val="present" onclick="setStatus(${s.id}, 'present')">P</div>
+                        <div class="status-opt ${s.status === 'absent' ? 'active' : ''}" data-val="absent" onclick="setStatus(${s.id}, 'absent')">A</div>
+                        <div class="status-opt ${s.status === 'late' ? 'active' : ''}" data-val="late" onclick="setStatus(${s.id}, 'late')">L</div>
+                    </div>
+                </td>
+                <td><input type="text" value="${s.remarks || ''}" onchange="setRemarks(${s.id}, this.value)" style="width:100%; padding:6px; border:1px solid #e2e8f0; border-radius:4px;"></td>
+            `;
+            body.appendChild(tr);
+        });
+    }
+
+    function setStatus(id, val) {
+        const student = currentStudents.find(s => s.id === id);
+        student.status = val;
+        renderStudents();
+    }
+
+    function setRemarks(id, val) {
+        const student = currentStudents.find(s => s.id === id);
+        student.remarks = val;
+    }
+
+    function markAll(val) {
+        const statusLimit = document.getElementById('status-filter').value;
+        currentStudents.forEach(s => {
+            const studentStatus = s.is_active ? 'active' : 'inactive';
+            if (statusLimit === 'all' || statusLimit === studentStatus) {
+                s.status = val;
+            }
+        });
+        renderStudents();
+    }
+
+    document.getElementById('save-btn').addEventListener('click', async function () {
+        const selValue = document.getElementById('class-subject-select').value;
+        const [classId, subjectId] = selValue.split('_');
+        const date = document.getElementById('attendance-date').value;
+        const period = document.getElementById('period-no').value;
+
+        const payload = {
+            class_id: classId,
+            subject_id: subjectId,
+            date: date,
+            period_no: period,
+            records: currentStudents.map(s => ({ student_id: s.id, status: s.status, remarks: s.remarks }))
+        };
+
+        const res = await fetch("{{ url_for('teacher.mark_attendance') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            alert('Attendance saved successfully!');
+        } else {
+            alert('Error saving data');
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Edit Teacher: {{ teacher.name }}{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'admin/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div style="max-width: 600px; margin: 0 auto;">
+    <div class="card">
+        <form action="{{ url_for('admin.edit_teacher', teacher_id=teacher.id) }}" method="POST">
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Full Name *</label>
+                <input type="text" name="name" value="{{ teacher.name }}"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;" required>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Email Address *</label>
+                <input type="email" name="email" value="{{ teacher.email }}"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;" required>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Phone Number</label>
+                <input type="text" name="phone" value="{{ teacher.phone or '' }}"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Gender</label>
+                <select name="gender"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                    <option value="Male" {% if teacher.gender=='Male' %}selected{% endif %}>Male</option>
+                    <option value="Female" {% if teacher.gender=='Female' %}selected{% endif %}>Female</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Change Password (leave blank to
+                    keep current)</label>
+                <input type="password" name="new_password" placeholder="Enter new password"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+            </div>
+            <div class="mb-6">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" name="is_active" {% if teacher.is_active %}checked{% endif %}
+                        style="width:18px; height:18px;">
+                    <span style="font-weight: 600;">Account Active</span>
+                </label>
+                <p class="text-xs text-muted ml-7 mt-1">Inactive teachers cannot log in or manage classes.</p>
+            </div>
+            <div class="flex gap-3">
+                <button type="submit" class="btn btn-primary" style="flex: 1;">Update Teacher Record</button>
+                <a href="{{ url_for('admin.teachers') }}" class="btn btn-outline"
+                    style="flex: 1; text-align: center;">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

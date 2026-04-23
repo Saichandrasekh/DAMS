@@ -1,0 +1,139 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Attendance Reports{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'teacher/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="card mb-6">
+    <form method="GET" class="flex gap-4 items-end">
+        <div style="flex: 1;">
+            <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Class & Subject</label>
+            <select name="class_subject" class="card"
+                style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                <option value="">Select a Class</option>
+                {% for c in classes %}
+                <option value="{{ c.id }}_{{ c.subject_id }}" {{ 'selected' if (class_id|int==c.id and
+                    subject_id|int==c.subject_id) }}>
+                    {{ c.name }} - {{ c.section }} ({{ c.subject_name }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="width: 180px;">
+            <label style="display:block; font-size:0.875rem; margin-bottom:4px;">From</label>
+            <input type="date" name="from_date" value="{{ from_date }}" class="card"
+                style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+        </div>
+        <div style="width: 180px;">
+            <label style="display:block; font-size:0.875rem; margin-bottom:4px;">To</label>
+            <input type="date" name="to_date" value="{{ to_date }}" class="card"
+                style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+        </div>
+        <button type="submit" class="btn btn-primary">Generate</button>
+    </form>
+</div>
+
+{% if class_id and subject_id %}
+<div class="card">
+    <div class="flex justify-between items-center mb-6">
+        <h3 style="font-weight: 700;">Summary Report</h3>
+        <div class="flex gap-4">
+            <select id="status-filter" class="card"
+                style="padding: 6px 12px; border: 1px solid var(--border); font-size: 0.875rem;">
+                <option value="all">All Students</option>
+                <option value="active" selected>Active Only</option>
+                <option value="inactive">Inactive Only</option>
+            </select>
+            <button onclick="window.print()" class="btn" style="border: 1px solid var(--border);"><i
+                    class="fas fa-print"></i> Export PDF</button>
+        </div>
+    </div>
+    <table id="report-table">
+        <thead>
+            <tr>
+                <th>Student Name</th>
+                <th>Total Classes</th>
+                <th>Present</th>
+                <th>Absent</th>
+                <th>Late</th>
+                <th>Percentage</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in report %}
+            <tr data-status="{{ 'active' if r.is_active else 'inactive' }}">
+                <td style="font-weight: 600;">
+                    {{ r.name }}
+                    {% if not r.is_active %}<span
+                        style="background:#fee2e2; color:#991b1b; font-size:0.65rem; padding:2px 4px; border-radius:4px; margin-left:8px;">Inactive</span>{%
+                    endif %}
+                </td>
+                <td>{{ r.total_classes }}</td>
+                <td style="color: var(--success); font-weight: 600;">{{ r.present }}</td>
+                <td style="color: var(--danger); font-weight: 600;">{{ r.absent }}</td>
+                <td>{{ r.late }}</td>
+                <td>
+                    <div class="flex items-center gap-2">
+                        <div
+                            style="flex: 1; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; width: 60px;">
+                            <div
+                                style="width: {{ r.percentage or 0 }}%; height: 100%; background: {{ 'var(--success)' if (r.percentage or 0)|float >= 75 else 'var(--danger)' }};">
+                            </div>
+                        </div>
+                        <span
+                            style="font-weight: 700; color: {{ 'var(--success)' if (r.percentage or 0)|float >= 75 else 'var(--danger)' }};">{{
+                            r.percentage or 0 }}%</span>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not report %}
+            <tr>
+                <td colspan="6" class="text-center py-8 text-muted">No data found for the selected period.</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card p-12 text-center text-muted">
+    <i class="fas fa-chart-line fa-3x mb-4"></i>
+    <p>Select a class and date range to view attendance statistics.</p>
+</div>
+{% endif %}
+
+<script>
+    // Handle split value for class_subject
+    document.querySelector('form').addEventListener('submit', function (e) {
+        const val = document.querySelector('select[name="class_subject"]').value;
+        if (val) {
+            const [cid, sid] = val.split('_');
+            const cidInp = document.createElement('input');
+            cidInp.type = 'hidden'; cidInp.name = 'class_id'; cidInp.value = cid;
+            const sidInp = document.createElement('input');
+            sidInp.type = 'hidden'; sidInp.name = 'subject_id'; sidInp.value = sid;
+            this.appendChild(cidInp);
+            this.appendChild(sidInp);
+        }
+    });
+
+    // Status filtering
+    const statusFilter = document.getElementById('status-filter');
+    if (statusFilter) {
+        statusFilter.addEventListener('change', function () {
+            const val = this.value;
+            const rows = document.querySelectorAll('#report-table tbody tr');
+            rows.forEach(row => {
+                if (val === 'all') row.style.display = '';
+                else if (row.dataset.status === val) row.style.display = '';
+                else row.style.display = 'none';
+            });
+        });
+        // Initial trigger
+        statusFilter.dispatchEvent(new Event('change'));
+    }
+</script>
+{% endblock %}

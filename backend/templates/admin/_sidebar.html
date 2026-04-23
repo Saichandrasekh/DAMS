@@ -1,0 +1,72 @@
+<ul style="list-style: none;">
+    <li class="mb-2">
+        <a href="{{ url_for('admin.dashboard') }}"
+            class="btn {{ 'btn-primary' if request.endpoint == 'admin.dashboard' else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint == 'admin.dashboard' else 'transparent' }}; color: {{ 'white' if request.endpoint == 'admin.dashboard' else 'var(--text)' }};">
+            <i class="fas fa-chart-line"></i> Dashboard
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('admin.exams') }}"
+            class="btn {{ 'btn-primary' if request.endpoint == 'admin.exams' else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint == 'admin.exams' else 'transparent' }}; color: {{ 'white' if request.endpoint == 'admin.exams' else 'var(--text)' }};">
+            <i class="fas fa-file-invoice"></i> Exams & Results
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('admin.timetable') }}"
+            class="btn {{ 'btn-primary' if request.endpoint == 'admin.timetable' else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint == 'admin.timetable' else 'transparent' }}; color: {{ 'white' if request.endpoint == 'admin.timetable' else 'var(--text)' }};">
+            <i class="fas fa-calendar-alt"></i> Timetable
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('admin.master_timetable') }}"
+            class="btn {{ 'btn-primary' if request.endpoint == 'admin.master_timetable' else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint == 'admin.master_timetable' else 'transparent' }}; color: {{ 'white' if request.endpoint == 'admin.master_timetable' else 'var(--text)' }};">
+            <i class="fas fa-eye"></i> Master Overview
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('admin.students') }}"
+            class="btn {{ 'btn-primary' if request.endpoint in ['admin.students', 'admin.add_student', 'admin.edit_student'] else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint in ['admin.students', 'admin.add_student', 'admin.edit_student'] else 'transparent' }}; color: {{ 'white' if request.endpoint in ['admin.students', 'admin.add_student', 'admin.edit_student'] else 'var(--text)' }};">
+            <i class="fas fa-user-graduate"></i> Students
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('admin.teachers') }}"
+            class="btn {{ 'btn-primary' if request.endpoint in ['admin.teachers', 'admin.add_teacher', 'admin.edit_teacher'] else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint in ['admin.teachers', 'admin.add_teacher', 'admin.edit_teacher'] else 'transparent' }}; color: {{ 'white' if request.endpoint in ['admin.teachers', 'admin.add_teacher', 'admin.edit_teacher'] else 'var(--text)' }};">
+            <i class="fas fa-chalkboard-teacher"></i> Teachers
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('admin.classes') }}"
+            class="btn {{ 'btn-primary' if request.endpoint in ['admin.classes', 'admin.edit_class'] else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint in ['admin.classes', 'admin.edit_class'] else 'transparent' }}; color: {{ 'white' if request.endpoint in ['admin.classes', 'admin.edit_class'] else 'var(--text)' }};">
+            <i class="fas fa-layer-group"></i> Classes
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('admin.subjects') }}"
+            class="btn {{ 'btn-primary' if request.endpoint in ['admin.subjects', 'admin.edit_subject'] else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint in ['admin.subjects', 'admin.edit_subject'] else 'transparent' }}; color: {{ 'white' if request.endpoint in ['admin.subjects', 'admin.edit_subject'] else 'var(--text)' }};">
+            <i class="fas fa-book"></i> Subjects
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('admin.staff_attendance') }}"
+            class="btn {{ 'btn-primary' if request.endpoint == 'admin.staff_attendance' else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint == 'admin.staff_attendance' else 'transparent' }}; color: {{ 'white' if request.endpoint == 'admin.staff_attendance' else 'var(--text)' }};">
+            <i class="fas fa-clipboard-user"></i> Staff Attendance
+        </a>
+    </li>
+    <li class="mt-4 mb-2">
+        <a href="{{ url_for('admin.settings') }}"
+            class="btn {{ 'btn-primary' if request.endpoint == 'admin.settings' else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint == 'admin.settings' else 'transparent' }}; color: {{ 'white' if request.endpoint == 'admin.settings' else 'var(--text)' }};">
+            <i class="fas fa-cog"></i> Settings
+        </a>
+    </li>
+</ul>

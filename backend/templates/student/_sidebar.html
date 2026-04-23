@@ -1,0 +1,26 @@
+<ul style="list-style: none;">
+    <li class="mb-2">
+        <a href="{{ url_for('student.dashboard') }}"
+            class="nav-link {{ 'active' if request.endpoint == 'student.dashboard' else '' }}">
+            <i class="fas fa-th-large"></i> Dashboard
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('student.attendance') }}"
+            class="nav-link {{ 'active' if request.endpoint == 'student.attendance' else '' }}">
+            <i class="fas fa-calendar-alt"></i> My Attendance
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('student.report_card') }}"
+            class="nav-link {{ 'active' if request.endpoint == 'student.report_card' else '' }}">
+            <i class="fas fa-medal"></i> Exam Results
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('student.timetable') }}"
+            class="nav-link {{ 'active' if request.endpoint == 'student.timetable' else '' }}">
+            <i class="fas fa-calendar-day"></i> Weekly Timetable
+        </a>
+    </li>
+</ul>

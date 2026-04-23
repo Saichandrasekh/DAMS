@@ -1,0 +1,44 @@
+<ul style="list-style: none;">
+    <li class="mb-2">
+        <a href="{{ url_for('teacher.dashboard') }}"
+            class="btn {{ 'btn-primary' if request.endpoint == 'teacher.dashboard' else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint == 'teacher.dashboard' else 'transparent' }}; color: {{ 'white' if request.endpoint == 'teacher.dashboard' else 'var(--text)' }};">
+            <i class="fas fa-home"></i> Dashboard
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('teacher.mark_attendance') }}"
+            class="btn {{ 'btn-primary' if request.endpoint == 'teacher.mark_attendance' else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint == 'teacher.mark_attendance' else 'transparent' }}; color: {{ 'white' if request.endpoint == 'teacher.mark_attendance' else 'var(--text)' }};">
+            <i class="fas fa-calendar-check"></i> Mark Attendance
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('teacher.my_classes') }}"
+            class="btn {{ 'btn-primary' if request.endpoint == 'teacher.my_classes' else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint == 'teacher.my_classes' else 'transparent' }}; color: {{ 'white' if request.endpoint == 'teacher.my_classes' else 'var(--text)' }};">
+            <i class="fas fa-users"></i> My Classes
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('teacher.timetable') }}"
+            class="btn {{ 'btn-primary' if request.endpoint == 'teacher.timetable' else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint == 'teacher.timetable' else 'transparent' }}; color: {{ 'white' if request.endpoint == 'teacher.timetable' else 'var(--text)' }};">
+            <i class="fas fa-calendar-alt"></i> My Schedule
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('teacher.marks_entry') }}"
+            class="btn {{ 'btn-primary' if request.endpoint == 'teacher.marks_entry' else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint == 'teacher.marks_entry' else 'transparent' }}; color: {{ 'white' if request.endpoint == 'teacher.marks_entry' else 'var(--text)' }};">
+            <i class="fas fa-star"></i> Enter Marks
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('teacher.attendance_report') }}"
+            class="btn {{ 'btn-primary' if request.endpoint == 'teacher.attendance_report' else '' }}"
+            style="width: 100%; justify-content: flex-start; background: {{ 'var(--primary)' if request.endpoint == 'teacher.attendance_report' else 'transparent' }}; color: {{ 'white' if request.endpoint == 'teacher.attendance_report' else 'var(--text)' }};">
+            <i class="fas fa-file-invoice"></i> Reports
+        </a>
+    </li>
+</ul>

@@ -1,0 +1,44 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}My Assigned Classes{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'teacher/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+    {% for c in classes %}
+    <div class="card" style="border-top: 4px solid var(--primary);">
+        <div class="flex justify-between items-start mb-4">
+            <div>
+                <h3 style="font-size: 1.25rem;">{{ c.name }} - {{ c.section }}</h3>
+                <p style="color: var(--primary); font-weight: 600; font-size: 0.875rem;">{{ c.subject_name }}</p>
+            </div>
+            <span
+                style="background: #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;">
+                {{ c.student_count }} Students
+            </span>
+        </div>
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 16px 0;">
+        <div class="flex gap-3">
+            <a href="{{ url_for('teacher.mark_attendance') }}?class_id={{ c.id }}&subject_id={{ c.subject_id }}"
+                class="btn btn-primary btn-sm" style="flex: 1;">
+                <i class="fas fa-check-square"></i> Mark Attendance
+            </a>
+            <a href="{{ url_for('teacher.attendance_report') }}?class_id={{ c.id }}&subject_id={{ c.subject_id }}"
+                class="btn btn-sm" style="border: 1px solid var(--border);">
+                <i class="fas fa-chart-bar"></i> View Report
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+    {% if not classes %}
+    <div class="card" style="grid-column: 1 / -1; padding: 60px; text-align: center;">
+        <i class="fas fa-school fa-3x text-muted mb-4"></i>
+        <h3>No classes found</h3>
+        <p class="text-muted">You haven't been assigned to any classes or subjects yet.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

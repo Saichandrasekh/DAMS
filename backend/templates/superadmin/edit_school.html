@@ -1,0 +1,135 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Edit School: {{ school.name }}{% endblock %}
+
+{% block sidebar_nav %}
+<ul style="list-style: none;">
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.dashboard') }}" class="nav-link">
+            <i class="fas fa-home"></i> Dashboard
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.schools') }}" class="nav-link active">
+            <i class="fas fa-university"></i> Schools
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.credentials') }}" class="nav-link">
+            <i class="fas fa-key"></i> Credentials
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.audit_logs') }}" class="nav-link">
+            <i class="fas fa-history"></i> Audit Logs
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block dashboard_content %}
+<div style="max-width: 800px;">
+    <form action="{{ url_for('superadmin.edit_school', school_id=school.id) }}" method="POST">
+        <!-- General Info -->
+        <div class="card mb-4">
+            <h3 class="section-title">General Information</h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">School Name *</label>
+                    <input type="text" name="name" class="form-control" value="{{ school.name }}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">School Code</label>
+                    <input type="text" class="form-control" value="{{ school.code }}" disabled
+                        style="background: var(--border-light); cursor: not-allowed;">
+                    <p class="text-xs text-muted mt-1">Code cannot be changed after creation</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Contact Email</label>
+                    <input type="email" name="email" class="form-control" value="{{ school.email or '' }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Phone Number</label>
+                    <input type="text" name="phone" class="form-control" value="{{ school.phone or '' }}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Address</label>
+                <textarea name="address" class="form-control">{{ school.address or '' }}</textarea>
+            </div>
+        </div>
+
+        <!-- Theme & Academic -->
+        <div class="card mb-4">
+            <h3 class="section-title">Academic Settings</h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Theme Color</label>
+                    <input type="color" name="primary_color" value="{{ school.primary_color or '#4f46e5' }}"
+                        class="form-control" style="height: 42px; padding: 4px;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Academic Year</label>
+                    <input type="text" name="academic_year" class="form-control"
+                        value="{{ school.academic_year or '' }}" placeholder="e.g. 2025-2026">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Periods Per Day</label>
+                    <input type="number" name="periods_per_day" class="form-control"
+                        value="{{ school.periods_per_day or 8 }}" min="1" max="15">
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance Rules -->
+        <div class="card mb-4">
+            <h3 class="section-title">Attendance Rules</h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Min Attendance % Required</label>
+                    <input type="number" name="min_attendance_pct" class="form-control"
+                        value="{{ school.min_attendance_pct or 75 }}" min="0" max="100">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Late Cutoff Time</label>
+                    <input type="time" name="late_cutoff_time" class="form-control"
+                        value="{{ school.late_cutoff_time or '09:00' }}">
+                </div>
+            </div>
+        </div>
+
+        <!-- School Admins Info (read-only) -->
+        {% if admins %}
+        <div class="card mb-4">
+            <h3 class="section-title">School Administrators</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for admin in admins %}
+                        <tr>
+                            <td style="font-weight: 500;">{{ admin.name }}</td>
+                            <td class="text-muted">{{ admin.email }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Actions -->
+        <div class="flex gap-3">
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="fas fa-save"></i> Update School
+            </button>
+            <a href="{{ url_for('superadmin.schools') }}" class="btn btn-outline btn-lg">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

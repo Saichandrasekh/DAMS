@@ -1,0 +1,74 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}School Configuration{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'admin/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div style="max-width: 800px; margin: 0 auto;">
+    <form action="{{ url_for('admin.settings') }}" method="POST">
+        <div class="card mb-6">
+            <h3 class="mb-4">Brand & Appearance</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Primary Theme Color</label>
+                    <input type="color" name="primary_color" value="{{ school.primary_color }}"
+                        style="width:100%; height:45px; border-radius:8px; border:1px solid var(--border); padding:2px;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Academic Year</label>
+                    <input type="text" name="academic_year" value="{{ school.academic_year }}" classcard"
+                        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-6">
+            <h3 class="mb-4">Attendance Policies</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Periods Per Day</label>
+                    <input type="number" name="periods_per_day" value="{{ school.periods_per_day }}" classcard"
+                        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Min Attendance Required
+                        (%)</label>
+                    <input type="number" name="min_attendance_pct" value="{{ school.min_attendance_pct }}" classcard"
+                        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Late Cutoff Time</label>
+                    <input type="time" name="late_cutoff_time" value="{{ school.late_cutoff_time }}" classcard"
+                        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-6">
+            <h3 class="mb-4">Contact Information</h3>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Address</label>
+                <textarea name="address" classcard"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; min-height:80px;">{{ school.address or '' }}</textarea>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Email</label>
+                    <input type="email" name="email" value="{{ school.email or '' }}" classcard"
+                        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Phone</label>
+                    <input type="text" name="phone" value="{{ school.phone or '' }}" classcard"
+                        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="padding: 12px 32px;">Save Configurations</button>
+    </form>
+</div>
+{% endblock %}

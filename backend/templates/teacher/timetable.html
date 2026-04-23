@@ -1,0 +1,56 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}My Teaching Schedule{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'teacher/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="card mb-6">
+    <h2 class="font-outfit font-bold text-xl mb-1">Weekly Teaching Schedule</h2>
+    <p class="text-muted text-sm">Overview of your assigned classes and periods for the week.</p>
+</div>
+
+<div class="card p-0 overflow-hidden shadow-sm border-border animate-slide-up">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-emerald-600 text-white">
+                    <th class="p-4 w-32 font-bold text-[10px] uppercase tracking-widest border-r border-white/10">Day
+                    </th>
+                    {% for p in range(1, periods + 1) %}
+                    <th
+                        class="p-4 font-bold text-[10px] uppercase tracking-widest text-center border-r border-white/10 last:border-r-0">
+                        P{{ p }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] %}
+                <tr class="border-b border-border last:border-b-0 hover:bg-slate-50 transition-colors">
+                    <td
+                        class="p-4 bg-slate-50/50 font-black text-[10px] uppercase text-slate-400 text-center border-r border-border">
+                        {{ day[:3] }}</td>
+                    {% for p in range(1, periods + 1) %}
+                    {% set key = day ~ '-' ~ p %}
+                    {% set slot = data[key] %}
+                    <td class="p-2 border-r border-border last:border-r-0">
+                        {% if slot %}
+                        <div class="p-2 rounded-lg bg-emerald-50 border border-emerald-100 text-center">
+                            <div class="font-bold text-[11px] text-emerald-700 leading-tight">{{ slot.subject_name }}
+                            </div>
+                            <div class="text-[9px] text-emerald-400 mt-1">{{ slot.class_name }} {{ slot.section }}</div>
+                        </div>
+                        {% else %}
+                        <div class="p-3 text-center text-[10px] text-slate-300 italic">-</div>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

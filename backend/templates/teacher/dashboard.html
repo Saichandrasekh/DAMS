@@ -1,0 +1,86 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Teacher Dashboard{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'teacher/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="card mb-8"
+    style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); color: white; padding: 40px;">
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 style="font-size: 2.25rem;">Welcome back, {{ session['user_name'] }}!</h1>
+            <p style="opacity: 0.8; font-size: 1.125rem; margin-top: 8px;">It's {{ day_name }}, {{ today }}</p>
+        </div>
+        <div class="flex gap-4">
+            <button id="checkin-btn" class="btn" style="background: var(--success); color: white; padding: 12px 24px;">
+                <i class="fas fa-clock"></i> Quick Check-in
+            </button>
+        </div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+    <div class="card bg-indigo-50 border-indigo-100 flex flex-col justify-between">
+        <div>
+            <h3 class="mb-2 text-indigo-900">Exam Results</h3>
+            <p class="text-sm text-indigo-700/70 mb-4">Click below to enter or edit student marks for current
+                examinations.</p>
+        </div>
+        <a href="{{ url_for('teacher.marks_entry') }}" class="btn btn-primary w-full">
+            <i class="fas fa-plus"></i> Enter Marks
+        </a>
+    </div>
+    <div class="card bg-emerald-50 border-emerald-100 flex flex-col">
+        <h3 class="mb-3 text-emerald-900 border-b border-emerald-100 pb-2">Today's Periods</h3>
+        <div class="flex flex-col gap-2 max-h-[120px] overflow-y-auto">
+            {% for s in my_schedule %}
+            <div class="flex justify-between items-center bg-white p-2 rounded border border-emerald-100 text-xs">
+                <span class="font-black text-emerald-600">P{{ s.period_no }}</span>
+                <span class="font-bold text-slate-700">{{ s.subject_name }}</span>
+                <span class="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg font-bold">{{ s.class_name }}</span>
+            </div>
+            {% endfor %}
+            {% if not my_schedule %}
+            <div class="py-4 text-center text-emerald-600/60 text-xs italic">No periods assigned for today.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h3 class="mb-4">Today's Schedule</h3>
+    <ul style="list-style: none;">
+        {% for c in my_classes %}
+        <li class="flex justify-between items-center py-3" style="border-bottom: 1px solid var(--border);">
+            <div>
+                <p style="font-weight: 600;">{{ c.subject_name }}</p>
+                <p style="font-size: 0.8125rem; color: var(--text-muted);">{{ c.name }} - {{ c.section }}</p>
+            </div>
+            <a href="{{ url_for('teacher.mark_attendance') }}?class_id={{ c.id }}&subject_id={{ c.subject_id }}"
+                class="btn btn-primary btn-sm" style="font-size: 0.75rem;">
+                Mark Attendance
+            </a>
+        </li>
+        {% endfor %}
+        {% if not my_classes %}
+        <li class="text-muted py-4">No classes assigned for you.</li>
+        {% endif %}
+    </ul>
+</div>
+</div>
+
+<script>
+    document.getElementById('checkin-btn').addEventListener('click', async function () {
+        const res = await fetch("{{ url_for('teacher.staff_checkin') }}", { method: 'POST' });
+        const data = await res.json();
+        if (data.time) {
+            this.innerHTML = `<i class="fas fa-check"></i> Checked in at ${data.time}`;
+            this.style.opacity = '0.7';
+            this.disabled = true;
+        }
+    });
+</script>
+{% endblock %}

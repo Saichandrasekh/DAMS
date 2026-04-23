@@ -1,0 +1,196 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Student Dashboard{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'student/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="flex flex-col gap-6">
+    <!-- Header Stats -->
+    <div class="flex flex-wrap gap-4">
+        <div class="card flex-1 min-w-[240px]">
+            <div class="flex items-center gap-4">
+                <div class="avatar avatar-lg avatar-primary">
+                    <i class="fas fa-user-graduate"></i>
+                </div>
+                <div>
+                    <h2 style="font-weight: 700; font-size: 1.25rem;">{{ info.name }}</h2>
+                    <p class="text-muted text-sm">{{ info.class_name }} - {{ info.section }} | Roll: {{ info.roll_no }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="card flex justify-center items-center gap-6" style="min-width: 300px;">
+            <div class="text-center">
+                <p class="text-muted text-xs uppercase letter-spacing-1 mb-1">Overall Attendance</p>
+                <h3 style="font-size: 2rem; font-weight: 800; color: var(--primary);">{{ overall_pct }}%</h3>
+                <div class="card bg-emerald-50 border-emerald-100 flex flex-col p-4 shadow-sm"
+                    style="min-width: 250px;">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-xs uppercase font-black tracking-widest text-emerald-800 opacity-90">{{ day_name
+                            }} Schedule</h3>
+                        <i class="fas fa-calendar-check text-emerald-600 opacity-50"></i>
+                    </div>
+                    <div class="flex flex-col gap-2 max-h-[100px] overflow-y-auto pr-1">
+                        {% for s in schedule %}
+                        <div
+                            class="flex justify-between items-center bg-white p-2 rounded-lg border border-emerald-100 text-xs shadow-sm">
+                            <span class="font-black text-emerald-600">P{{ s.period_no }}</span>
+                            <span class="font-bold text-slate-800">{{ s.subject_name }}</span>
+                        </div>
+                        {% endfor %}
+                        {% if not schedule %}
+                        <p class="text-[10px] italic text-emerald-600/60 text-center py-2">No classes scheduled for
+                            today.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="attendance-progress" style="--pct: {{ overall_pct }}">
+                <svg viewBox="0 0 36 36">
+                    <path class="bg"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    <path class="fg" stroke-dasharray="{{ overall_pct }}, 100"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                </svg>
+            </div>
+        </div>
+        <div class="card bg-indigo-600 text-white flex justify-center items-center gap-4" style="min-width: 200px;">
+            <div class="text-center">
+                <i class="fas fa-medal text-3xl mb-2"></i>
+                <p class="text-xs uppercase font-bold opacity-80">My Results</p>
+                <a href="{{ url_for('student.report_card') }}" class="btn btn-sm btn-light mt-2"
+                    style="background: white; color: var(--primary);">View Report Card</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="flex flex-wrap gap-6">
+        <!-- Subject Attendance -->
+        <div class="card flex-1 min-w-[360px]">
+            <h3 class="mb-4" style="font-weight: 700;">Subject Wise Attendance</h3>
+            <div class="flex flex-col gap-4">
+                {% for sub in subject_stats %}
+                <div class="subject-row">
+                    <div class="flex justify-between items-center mb-1">
+                        <span style="font-weight: 600; font-size: 0.875rem;">{{ sub.subject_name }}</span>
+                        <span class="text-sm"
+                            style="color: {% if sub.pct < 75 %}var(--danger){% else %}var(--success){% endif %}; font-weight: 700;">
+                            {{ sub.pct }}%
+                        </span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill"
+                            style="width: {{ sub.pct }}%; background: {% if sub.pct < 75 %}var(--danger){% else %}var(--primary){% endif %};">
+                        </div>
+                    </div>
+                    <p class="text-xs text-muted mt-1">{{ sub.present }} / {{ sub.total }} Classes</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Recent Logs -->
+        <div class="card flex-1 min-w-[360px]">
+            <h3 class="mb-4" style="font-weight: 700;">Recent Activity</h3>
+            <div class="scroll-y" style="max-height: 400px;">
+                <div class="flex flex-col gap-3">
+                    {% for r in recent %}
+                    <div class="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50">
+                        <div class="status-indicator status-{{ r.status }}"></div>
+                        <div class="flex-1">
+                            <p style="font-weight: 600; font-size: 0.875rem;">{{ r.subject_name }}</p>
+                            <p class="text-muted text-xs">Period {{ r.period_no or '-' }} | {{ r.date }}</p>
+                        </div>
+                        <span class="badge badge-{{ r.status }}">{{ r.status|capitalize }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .attendance-progress {
+        width: 80px;
+        height: 80px;
+    }
+
+    .attendance-progress svg {
+        display: block;
+    }
+
+    .attendance-progress path.bg {
+        fill: none;
+        stroke: var(--border);
+        stroke-width: 3;
+    }
+
+    .attendance-progress path.fg {
+        fill: none;
+        stroke: var(--primary);
+        stroke-width: 3;
+        stroke-linecap: round;
+        transition: stroke-dasharray 0.3s ease;
+    }
+
+    .progress-bar-container {
+        height: 6px;
+        background: var(--border);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    .progress-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.3s ease;
+    }
+
+    .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+    .status-present {
+        background: var(--success);
+    }
+
+    .status-absent {
+        background: var(--danger);
+    }
+
+    .status-late {
+        background: var(--warning);
+    }
+
+    .badge-present {
+        background: #dcfce7;
+        color: #166534;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+    }
+
+    .badge-absent {
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+    }
+
+    .badge-late {
+        background: #fef9c3;
+        color: #854d0e;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+    }
+</style>
+{% endblock %}

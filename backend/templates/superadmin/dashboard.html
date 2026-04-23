@@ -1,0 +1,136 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Platform Overview{% endblock %}
+
+{% block sidebar_nav %}
+<ul style="list-style: none;">
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.dashboard') }}" class="nav-link active">
+            <i class="fas fa-home"></i> Dashboard
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.schools') }}" class="nav-link">
+            <i class="fas fa-university"></i> Schools
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.credentials') }}" class="nav-link">
+            <i class="fas fa-key"></i> Credentials
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.audit_logs') }}" class="nav-link">
+            <i class="fas fa-history"></i> Audit Logs
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block dashboard_content %}
+<!-- Stats -->
+<div class="stats-grid">
+    <div class="stat-card" style="border-left-color: var(--primary);">
+        <p class="stat-label">Total Schools</p>
+        <h2 class="stat-value">{{ total_schools }}</h2>
+    </div>
+    <div class="stat-card" style="border-left-color: var(--success);">
+        <p class="stat-label">Total Users</p>
+        <h2 class="stat-value">{{ total_users }}</h2>
+    </div>
+    <div class="stat-card" style="border-left-color: var(--info);">
+        <p class="stat-label">Total Teachers</p>
+        <h2 class="stat-value">{{ total_teachers }}</h2>
+    </div>
+    <div class="stat-card" style="border-left-color: var(--warning);">
+        <p class="stat-label">Total Students</p>
+        <h2 class="stat-value">{{ total_students }}</h2>
+    </div>
+</div>
+
+<!-- Recent Schools Table -->
+<div class="card mb-6">
+    <div class="flex justify-between items-center mb-4">
+        <h3 style="font-weight: 700;">Recent Schools</h3>
+        <a href="{{ url_for('superadmin.add_school') }}" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> Add New School
+        </a>
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>School Name</th>
+                    <th>Code</th>
+                    <th>Students</th>
+                    <th>Teachers</th>
+                    <th>Created At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if not schools %}
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <i class="fas fa-school"></i>
+                            <h3>No Schools Yet</h3>
+                            <p>Start by adding your first school or college.</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endif %}
+                {% for school in schools %}
+                <tr>
+                    <td style="font-weight: 600;">{{ school.name }}</td>
+                    <td><span class="code-text">{{ school.code }}</span></td>
+                    <td>{{ school.student_count }}</td>
+                    <td>{{ school.teacher_count }}</td>
+                    <td class="text-muted text-sm">{{ school.created_at[:10] if school.created_at else '-' }}</td>
+                    <td>
+                        <div class="flex gap-2">
+                            <a href="{{ url_for('superadmin.edit_school', school_id=school.id) }}"
+                                class="btn-icon text-primary" title="Edit"><i class="fas fa-pencil-alt"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+{% if recent_logs %}
+<div class="card">
+    <div class="flex justify-between items-center mb-4">
+        <h3 style="font-weight: 700;">Recent Activity</h3>
+        <a href="{{ url_for('superadmin.audit_logs') }}" class="btn btn-ghost btn-sm">
+            View All <i class="fas fa-arrow-right"></i>
+        </a>
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in recent_logs %}
+                <tr>
+                    <td class="text-muted text-sm whitespace-nowrap">{{ log.created_at }}</td>
+                    <td>{{ log.user_name or '-' }}</td>
+                    <td><span class="badge badge-neutral">{{ log.action }}</span></td>
+                    <td class="text-muted text-sm truncate" style="max-width: 300px;">{{ log.details or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

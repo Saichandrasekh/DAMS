@@ -1,0 +1,49 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Edit Subject: {{ subject.name }}{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'admin/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div style="max-width: 600px; margin: 0 auto;">
+    <div class="card">
+        <form action="{{ url_for('admin.edit_subject', subject_id=subject.id) }}" method="POST">
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Subject Name *</label>
+                <input type="text" name="name" value="{{ subject.name }}"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;" required>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Target Class *</label>
+                <select name="class_id"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;" required>
+                    {% for c in classes %}
+                    <option value="{{ c.id }}" {% if subject.class_id==c.id %}selected{% endif %}>
+                        {{ c.name }} - {{ c.section }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-6">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Assigned Teacher</label>
+                <select name="teacher_id"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                    <option value="">Assign Later</option>
+                    {% for t in teachers %}
+                    <option value="{{ t.id }}" {% if subject.teacher_id==t.id %}selected{% endif %}>
+                        {{ t.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex gap-3">
+                <button type="submit" class="btn btn-primary" style="flex: 1;">Update Subject</button>
+                <a href="{{ url_for('admin.subjects') }}" class="btn btn-outline"
+                    style="flex: 1; text-align: center;">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Classes & Sections{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'admin/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px;">
+    <!-- Add Class Form -->
+    <div class="card" style="height: fit-content;">
+        <h3 class="mb-4">Create New Class</h3>
+        <form action="{{ url_for('admin.add_class') }}" method="POST">
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Class Name (e.g. Grade 10)</label>
+                <input type="text" name="name" class="card"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;"
+                    placeholder="Grade 10" required>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Section (e.g. A)</label>
+                <input type="text" name="section" class="card"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;" placeholder="A"
+                    required>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Academic Year</label>
+                <input type="text" name="academic_year" value="2025-2026" class="card"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Class Teacher</label>
+                <select name="class_teacher_id" class="card"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                    <option value="">Select a Teacher</option>
+                    {% for t in teachers %}
+                    <option value="{{ t.id }}">{{ t.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Create Class</button>
+        </form>
+    </div>
+
+    <!-- Class List -->
+    <div class="card">
+        <h3 class="mb-4">Existing Classes</h3>
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Class - Section</th>
+                        <th>Class Teacher</th>
+                        <th>Students</th>
+                        <th>Subjects</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in classes %}
+                    <tr>
+                        <td style="font-weight: 600;">{{ c.name }} - {{ c.section }}</td>
+                        <td>{{ c.class_teacher_name or 'Not Assigned' }}</td>
+                        <td><span style="background: #e2e8f0; padding: 2px 8px; border-radius: 4px;">{{ c.student_count
+                                }}</span></td>
+                        <td>{{ c.subject_count }}</td>
+                        <td>
+                            <div class="flex gap-4">
+                                <a href="{{ url_for('admin.edit_class', class_id=c.id) }}"
+                                    class="text-muted hover:text-primary" title="Edit Class">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <form action="{{ url_for('admin.delete_class', class_id=c.id) }}" method="POST"
+                                    style="display: inline;">
+                                    <button type="button"
+                                        data-confirm="Are you sure you want to archive this class? This will only work if no students are assigned."
+                                        data-title="Archive Class"
+                                        style="background: none; border: none; padding: 0; cursor: pointer;">
+                                        <i class="fas fa-trash-alt text-muted hover:text-danger"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not classes %}
+                    <tr>
+                        <td colspan="5" class="text-center py-8 text-muted">No classes created yet.</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

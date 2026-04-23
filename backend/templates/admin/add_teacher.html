@@ -1,0 +1,45 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Register New Teacher{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'admin/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div style="max-width: 600px; margin: 0 auto;">
+    <div class="card">
+        <form action="{{ url_for('admin.add_teacher') }}" method="POST">
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Full Name *</label>
+                <input type="text" name="name" classcard"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;" required>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Email Address *</label>
+                <input type="email" name="email" classcard"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;" required>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Phone Number</label>
+                <input type="text" name="phone" classcard"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Temporary Password *</label>
+                <input type="text" name="password" value="Teacher@123" classcard"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;" required>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Gender</label>
+                <select name="gender" classcard"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Save Teacher Record</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
