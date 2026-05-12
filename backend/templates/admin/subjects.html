@@ -1,0 +1,89 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Subject Management{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'admin/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px;">
+    <div class="card" style="height: fit-content;">
+        <h3 class="mb-4">Add New Subject</h3>
+        <form action="{{ url_for('admin.add_subject') }}" method="POST">
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Subject Name</label>
+                <input type="text" name="name" class="card"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;"
+                    placeholder="Mathematics" required>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Target Class</label>
+                <select name="class_id" class="card"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;" required>
+                    <option value="">Select Class</option>
+                    {% for c in classes %}
+                    <option value="{{ c.id }}">{{ c.name }} - {{ c.section }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Assigned Teacher</label>
+                <select name="teacher_id" class="card"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                    <option value="">Assign Later</option>
+                    {% for t in teachers %}
+                    <option value="{{ t.id }}">{{ t.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Map Subject</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3 class="mb-4">Subject Map</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>Class</th>
+                    <th>Teacher</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in subjects %}
+                <tr>
+                    <td style="font-weight: 600;">{{ s.name }}</td>
+                    <td>{{ s.class_name }} - {{ s.section }}</td>
+                    <td>{{ s.teacher_name or 'Unassigned' }}</td>
+                    <td>
+                        <div class="flex gap-4">
+                            <a href="{{ url_for('admin.edit_subject', subject_id=s.id) }}"
+                                class="text-muted hover:text-primary" title="Edit Subject">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <form action="{{ url_for('admin.delete_subject', subject_id=s.id) }}" method="POST"
+                                style="display: inline;">
+                                <button type="button" data-confirm="Are you sure you want to remove this subject?"
+                                    data-title="Remove Subject"
+                                    style="background: none; border: none; padding: 0; cursor: pointer;"
+                                    class="text-muted hover:text-danger" title="Delete Subject">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not subjects %}
+                <tr>
+                    <td colspan="4" class="text-center py-8 text-muted">No subjects mapped yet.</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

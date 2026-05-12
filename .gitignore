@@ -1,0 +1,48 @@
+# ─── Secrets (NEVER commit) ─────────────────────────────────────
+backend/.secret_key
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+
+# ─── Database files (always backed up separately) ───────────────
+backend/database/*.db
+backend/database/*.db-shm
+backend/database/*.db-wal
+backend/database/*.sqlite*
+backend/database/backups/
+
+# ─── Python ─────────────────────────────────────────────────────
+backend/venv/
+**/__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# ─── Node / Vite ────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.local
+npm-debug.log*
+
+# ─── User uploads (per-deployment) ──────────────────────────────
+backend/static/uploads/
+
+# ─── Logs ───────────────────────────────────────────────────────
+backend/log_db.txt
+*.log
+logs/
+
+# ─── OS / IDE ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# ─── Tools we install but shouldn't commit ──────────────────────
+ngrok-download.zip
+nginx-download.zip

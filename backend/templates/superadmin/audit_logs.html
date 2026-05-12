@@ -1,0 +1,148 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}System Audit Logs{% endblock %}
+
+{% block sidebar_nav %}
+<ul style="list-style: none;">
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.dashboard') }}" class="nav-link">
+            <i class="fas fa-home"></i> Dashboard
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.schools') }}" class="nav-link">
+            <i class="fas fa-university"></i> Schools
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.credentials') }}" class="nav-link">
+            <i class="fas fa-key"></i> Credentials
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.audit_logs') }}" class="nav-link active">
+            <i class="fas fa-history"></i> Audit Logs
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="card mb-6" style="animation: fadeInSlideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);">
+    <form method="GET" class="flex flex-wrap gap-4 items-end">
+        <div style="flex: 1; min-width: 200px;">
+            <label class="form-label"
+                style="font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">School</label>
+            <select name="school_id" class="form-control">
+                <option value="">All Schools</option>
+                {% for school in schools %}
+                <option value="{{ school.id }}" {% if filters.school_id==school.id|string %}selected{% endif %}>
+                    {{ school.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="flex: 1; min-width: 150px;">
+            <label class="form-label" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">From
+                Date</label>
+            <input type="date" name="start_date" class="form-control" value="{{ filters.start_date }}">
+        </div>
+        <div style="flex: 1; min-width: 150px;">
+            <label class="form-label" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">To
+                Date</label>
+            <input type="date" name="end_date" class="form-control" value="{{ filters.end_date }}">
+        </div>
+        <div style="flex: 1; min-width: 150px;">
+            <label class="form-label"
+                style="font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Action</label>
+            <select name="action" class="form-control">
+                <option value="all">All Actions</option>
+                <option value="LOGIN" {% if filters.action=='LOGIN' %}selected{% endif %}>Logins</option>
+                <option value="SCHOOL" {% if filters.action=='SCHOOL' %}selected{% endif %}>School Updates</option>
+                <option value="ADD" {% if filters.action=='ADD' %}selected{% endif %}>Creations</option>
+                <option value="DELETE" {% if filters.action=='DELETE' %}selected{% endif %}>Deletions</option>
+            </select>
+        </div>
+        <div class="flex gap-2">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-filter"></i> Apply
+            </button>
+            <a href="{{ url_for('superadmin.audit_logs') }}" class="btn btn-outline" title="Reset">
+                <i class="fas fa-redo"></i>
+            </a>
+        </div>
+    </form>
+</div>
+
+<div class="card" style="animation: fadeInSlideUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);">
+    <div class="flex justify-between items-center mb-4">
+        <h3 style="font-size: 1.1rem; font-weight: 700;">System Events</h3>
+        <p class="text-muted text-sm">Found {{ logs|length }} entries</p>
+    </div>
+    <div class="table-wrapper">
+        <table id="logs-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>School</th>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>Details</th>
+                    <th>IP Address</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if not logs %}
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <i class="fas fa-clipboard-list"></i>
+                            <h3>No Logs Yet</h3>
+                            <p>Actions will appear here as users interact with the platform.</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endif %}
+                {% for log in logs %}
+                <tr>
+                    <td class="text-muted text-sm whitespace-nowrap">{{ log.created_at }}</td>
+                    <td style="font-weight: 600;">{{ log.school_name or 'Platform' }}</td>
+                    <td>{{ log.user_name or '-' }}</td>
+                    <td><span class="badge badge-neutral">{{ log.action }}</span></td>
+                    <td class="text-muted text-sm"
+                        style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                        title="{{ log.details }}">
+                        {{ log.details or '-' }}
+                    </td>
+                    <td><span class="code-text">{{ log.ip_address or '-' }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+    .badge-neutral {
+        background: #f1f5f9;
+        color: #475569;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .code-text {
+        font-family: 'SF Mono', monospace;
+        font-size: 0.8125rem;
+        color: var(--primary);
+        background: var(--primary-light);
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+
+    tbody tr:hover {
+        background: var(--primary-light) !important;
+    }
+</style>
+{% endblock %}

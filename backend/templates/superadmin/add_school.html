@@ -1,0 +1,93 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Onboard New School{% endblock %}
+
+{% block sidebar_nav %}
+<ul style="list-style: none;">
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.dashboard') }}" class="nav-link">
+            <i class="fas fa-home"></i> Dashboard
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.schools') }}" class="nav-link active">
+            <i class="fas fa-university"></i> Schools
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.credentials') }}" class="nav-link">
+            <i class="fas fa-key"></i> Credentials
+        </a>
+    </li>
+    <li class="mb-2">
+        <a href="{{ url_for('superadmin.audit_logs') }}" class="nav-link">
+            <i class="fas fa-history"></i> Audit Logs
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block dashboard_content %}
+<div style="max-width: 800px;">
+    <form action="{{ url_for('superadmin.add_school') }}" method="POST">
+        <!-- School Info -->
+        <div class="card mb-4">
+            <h3 class="section-title">School Information</h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">School Name *</label>
+                    <input type="text" name="name" class="form-control"
+                        placeholder="e.g. Greenwood International School" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">School Code *</label>
+                    <input type="text" name="code" class="form-control" placeholder="e.g. GWS001" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Contact Email</label>
+                    <input type="email" name="email" class="form-control" placeholder="contact@school.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Phone Number</label>
+                    <input type="text" name="phone" class="form-control" placeholder="+91 98765 43210">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Address</label>
+                <textarea name="address" class="form-control" placeholder="Full school address..."></textarea>
+            </div>
+        </div>
+
+        <!-- Admin Account -->
+        <div class="card mb-4">
+            <h3 class="section-title">Admin Account</h3>
+            <p class="text-muted text-sm mb-4">Create the primary administrator for this school. They will manage
+                teachers, classes, and students.</p>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Admin Name *</label>
+                    <input type="text" name="admin_name" class="form-control" placeholder="e.g. Principal Sharma"
+                        required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Admin Email *</label>
+                    <input type="email" name="admin_email" class="form-control" placeholder="admin@school.com" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Temporary Password *</label>
+                    <input type="password" name="admin_password" class="form-control" placeholder="Min 6 characters"
+                        required minlength="6">
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex gap-3">
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="fas fa-plus-circle"></i> Create School
+            </button>
+            <a href="{{ url_for('superadmin.schools') }}" class="btn btn-outline btn-lg">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

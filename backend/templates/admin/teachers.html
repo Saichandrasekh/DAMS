@@ -1,0 +1,141 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Staff & Teachers{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'admin/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="flex justify-between items-center mb-6">
+    <a href="{{ url_for('admin.add_teacher') }}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Add Teacher
+    </a>
+    <div class="flex gap-4">
+        <div style="position: relative;">
+            <i class="fas fa-search" style="position: absolute; left: 12px; top: 12px; color: var(--text-muted);"></i>
+            <input type="text" id="teacher-search" class="card"
+                style="padding: 10px 10px 10px 40px; border: 1px solid var(--border); width: 250px;"
+                placeholder="Search teachers...">
+        </div>
+        <select id="status-filter" class="card" style="padding: 10px; border: 1px solid var(--border); width: 150px;">
+            <option value="all">All Status</option>
+            <option value="active">Active Only</option>
+            <option value="inactive">Inactive Only</option>
+        </select>
+    </div>
+</div>
+
+<div class="card">
+    <div style="overflow-x: auto;">
+        <table id="teachers-table">
+            <thead>
+                <tr>
+                    <th>Teacher Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Password</th>
+                    <th>Assigned Subjects</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in teachers %}
+                <tr data-status="{{ 'active' if t.is_active else 'inactive' }}">
+                    <td>
+                        <div class="flex items-center gap-3">
+                            <div
+                                style="width: 32px; height: 32px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-teacher" style="font-size: 0.75rem; color: #991b1b;"></i>
+                            </div>
+                            <span style="font-weight: 600;">{{ t.name }}</span>
+                        </div>
+                    </td>
+                    <td>{{ t.email }}</td>
+                    <td>{{ t.phone or '-' }}</td>
+                    <td>
+                        {% if t.original_password %}
+                        <code
+                            style="background:#f1f5f9; padding:2px 4px; border-radius:4px; font-family:monospace; font-size:0.8rem;">{{ t.original_password }}</code>
+                        {% else %}
+                        <span class="text-xs text-muted"><em>Not stored</em></span>
+                        {% endif %}
+                    </td>
+                    <td><span style="font-size: 0.8125rem; color: var(--text-muted);">{{ t.subjects or 'None' }}</span>
+                    </td>
+                    <td>
+                        {% if t.is_active %}
+                        <span class="status-badge status-present">Active</span>
+                        {% else %}
+                        <span class="status-badge status-absent">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="flex gap-3">
+                            <a href="mailto:{{ t.email }}" class="text-muted hover:text-primary" title="Email Teacher">
+                                <i class="fas fa-envelope"></i>
+                            </a>
+                            <a href="{{ url_for('admin.edit_teacher', teacher_id=t.id) }}"
+                                class="text-muted hover:text-primary" title="Edit Teacher">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <form action="{{ url_for('admin.delete_teacher', teacher_id=t.id) }}" method="POST"
+                                style="display:inline;">
+                                <button type="button" data-confirm="Are you sure you want to remove this teacher?"
+                                    data-title="Remove Teacher"
+                                    style="background:none; border:none; padding:0; cursor:pointer;"
+                                    class="text-muted hover:text-danger" title="Delete Teacher">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not teachers %}
+                <tr>
+                    <td colspan="6" class="text-center py-8 text-muted">No teachers registered.</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+    .status-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .status-present {
+        background: #dcfce7;
+        color: #15803d;
+    }
+
+    .status-absent {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+</style>
+
+<script>
+    function filterTeachers() {
+        let searchValue = document.getElementById('teacher-search').value.toLowerCase();
+        let statusValue = document.getElementById('status-filter').value;
+        let rows = document.querySelectorAll('#teachers-table tbody tr');
+
+        rows.forEach(row => {
+            let matchesSearch = row.innerText.toLowerCase().includes(searchValue);
+            let matchesStatus = (statusValue === 'all') || (row.dataset.status === statusValue);
+            row.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
+        });
+    }
+
+    document.getElementById('teacher-search').addEventListener('keyup', filterTeachers);
+    document.getElementById('status-filter').addEventListener('change', filterTeachers);
+</script>
+{% endblock %}

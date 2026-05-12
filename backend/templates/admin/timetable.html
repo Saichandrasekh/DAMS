@@ -1,0 +1,125 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Timetable Setup{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'admin/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="mb-8 flex justify-between items-end">
+    <div>
+        <h2 class="font-outfit font-bold text-2xl mb-1">Class Schedule</h2>
+        <p class="text-muted text-sm italic">Assign subjects to daily time slots for each class.</p>
+    </div>
+    <div class="flex gap-4 items-center">
+        <label class="text-xs font-bold uppercase text-muted tracking-wide">Select Class:</label>
+        <select onchange="location.href='?class_id='+this.value" class="card border-border shadow-sm px-4 py-2 bg-white"
+            style="min-width: 200px;">
+            <option value="">-- Select --</option>
+            {% for c in classes %}
+            <option value="{{ c.id }}" {{ 'selected' if class_id==c.id }}>{{ c.name }} {{ c.section }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+{% if class_id %}
+<div class="card p-0 shadow-sm border-border overflow-hidden animate-slide-up">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse" style="table-layout: fixed;">
+            <thead>
+                <tr class="bg-slate-50 border-b border-border">
+                    <th
+                        class="p-4 w-32 font-bold text-[10px] text-muted uppercase tracking-widest text-center border-r border-border">
+                        Day</th>
+                    {% for p in range(1, periods + 1) %}
+                    <th
+                        class="p-4 font-bold text-[10px] text-muted uppercase tracking-widest text-center border-r border-border last:border-r-0">
+                        Period {{ p }}
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] %}
+                <tr class="border-b border-border last:border-b-0 group">
+                    <td
+                        class="p-4 bg-slate-50/50 font-bold text-xs text-slate-500 text-center border-r border-border uppercase letter-spacing-1">
+                        {{ day[:3] }}
+                    </td>
+                    {% for p in range(1, periods + 1) %}
+                    {% set key = day ~ '-' ~ p %}
+                    {% set active = data[key] %}
+                    <td
+                        class="p-2 border-r border-border last:border-r-0 relative hover:bg-slate-50/80 transition-colors">
+                        <select onchange="updateCell('{{ day }}', {{ p }}, this.value)"
+                            class="w-full p-2 bg-transparent border-none text-xs font-semibold {{ 'text-primary' if active else 'text-slate-400' }} cursor-pointer focus:ring-0">
+                            <option value="">(Empty)</option>
+                            {% for sub in subjects %}
+                            <option value="{{ sub.id }}" {{ 'selected' if data[key]==sub.id }}>{{ sub.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="mt-4 flex items-center justify-between">
+    <div class="flex items-center gap-2 text-[11px] text-muted font-medium">
+        <i class="fas fa-check-circle text-success"></i>
+        <span>Autosaves on selection</span>
+    </div>
+    <div class="text-[11px] text-muted italic">
+        School configured for <strong>{{ periods }} periods</strong> per day.
+    </div>
+</div>
+
+<script>
+    async function updateCell(day, period, subjectId) {
+        const classId = "{{ class_id }}";
+        const select = event.target;
+
+        // Smooth transition for text color
+        if (subjectId) {
+            select.classList.remove('text-slate-400');
+            select.classList.add('text-primary');
+        } else {
+            select.classList.remove('text-primary');
+            select.classList.add('text-slate-400');
+        }
+
+        try {
+            const res = await fetch("{{ url_for('admin.update_timetable') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    class_id: classId,
+                    day: day,
+                    period: period,
+                    subject_id: subjectId || null
+                })
+            });
+            const data = await res.json();
+            if (!data.success) {
+                showToast('Sync error!', 'error');
+            }
+        } catch (e) {
+            showToast('Connection error', 'error');
+        }
+    }
+</script>
+{% else %}
+<div class="card bg-slate-50 border-dashed border-2 py-24 text-center">
+    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white shadow-sm mb-4">
+        <i class="fas fa-search text-slate-300"></i>
+    </div>
+    <h3 class="text-slate-400 font-bold mb-1">No Class Selected</h3>
+    <p class="text-xs text-slate-400">Choose a class from the dropdown to start managing their schedule.</p>
+</div>
+{% endif %}
+{% endblock %}

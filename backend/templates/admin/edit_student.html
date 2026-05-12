@@ -1,0 +1,75 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Edit Student: {{ student.name }}{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'admin/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div style="max-width: 600px; margin: 0 auto;">
+    <div class="card">
+        <form action="{{ url_for('admin.edit_student', student_id=student.id) }}" method="POST">
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Full Name *</label>
+                <input type="text" name="name" value="{{ student.name }}"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;" required>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Email Address *</label>
+                <input type="email" name="email" value="{{ student.email }}"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;" required>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="mb-4">
+                    <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Class *</label>
+                    <select name="class_id"
+                        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;" required>
+                        {% for c in classes %}
+                        <option value="{{ c.id }}" {% if current_class and current_class.class_id==c.id %}selected{%
+                            endif %}>
+                            {{ c.name }} - {{ c.section }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Roll Number</label>
+                    <input type="text" name="roll_no" value="{{ current_class.roll_no if current_class else '' }}"
+                        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                </div>
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Phone Number</label>
+                <input type="text" name="phone" value="{{ student.phone or '' }}"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Date of Birth</label>
+                <input type="date" name="dob" value="{{ student.dob or '' }}"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+            </div>
+            <div class="mb-4">
+                <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Change Password (leave blank to
+                    keep current)</label>
+                <input type="password" name="new_password" placeholder="Enter new password"
+                    style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+            </div>
+            <div class="mb-6">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" name="is_active" {% if student.is_active %}checked{% endif %}
+                        style="width:18px; height:18px;">
+                    <span style="font-weight: 600;">Account Active</span>
+                </label>
+                <p class="text-xs text-muted ml-7 mt-1">Inactive students cannot log in and are hidden from attendance
+                    lists.</p>
+            </div>
+            <div class="flex gap-3">
+                <button type="submit" class="btn btn-primary" style="flex: 1;">Update Student</button>
+                <a href="{{ url_for('admin.students') }}" class="btn btn-outline"
+                    style="flex: 1; text-align: center;">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

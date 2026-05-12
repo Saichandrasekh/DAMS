@@ -1,0 +1,52 @@
+{% extends "dashboard_layout.html" %}
+
+{% block page_title %}Staff Attendance Log{% endblock %}
+
+{% block sidebar_nav %}
+{% include 'admin/_sidebar.html' %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="card mb-6">
+    <form method="GET" class="flex gap-4 items-end">
+        <div>
+            <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Filter Date</label>
+            <input type="date" name="date" value="{{ date_filter }}" classcard"
+                style="padding:10px; border:1px solid var(--border); border-radius:8px;">
+        </div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+    </form>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Staff Name</th>
+                <th>Role</th>
+                <th>Check In</th>
+                <th>Check Out</th>
+                <th>Status</th>
+                <th>Remarks</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in records %}
+            <tr>
+                <td style="font-weight: 600;">{{ r.staff_name }}</td>
+                <td><span style="text-transform: capitalize; font-size: 0.8125rem;">{{ r.role }}</span></td>
+                <td>{{ r.check_in or '-' }}</td>
+                <td>{{ r.check_out or '-' }}</td>
+                <td><span class="status-badge status-{{ r.status }}">{{ r.status }}</span></td>
+                <td>{{ r.remarks or '-' }}</td>
+            </tr>
+            {% endfor %}
+            {% if not records %}
+            <tr>
+                <td colspan="6" class="text-center py-8 text-muted">No attendance marked for this date.</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
