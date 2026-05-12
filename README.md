@@ -9,6 +9,47 @@ production-deployable on Windows.
 
 ---
 
+## 🚀 Quick start (fresh laptop, 3 steps)
+
+### Prerequisites (install once)
+- **Python 3.9+** — https://www.python.org/downloads/  (tick "Add to PATH" during install)
+- **Node.js 18+ LTS** — https://nodejs.org
+- **Git** — https://git-scm.com/download/win
+
+### Clone + run
+
+```powershell
+# 1) Clone
+git clone https://github.com/Saichandrasekh/DAMS.git
+cd DAMS
+
+# 2) First-time setup (creates venv, installs everything, ~5 min)
+.\setup.ps1
+
+# 3) Run in dev mode (no Nginx needed)
+.\dev.ps1
+```
+
+That's it. The browser opens **http://localhost:5173/** automatically.
+
+Log in:
+- Super Admin: `superadmin@admin.com / admin123`
+- (If you said "Y" to demo data during setup) Principal: `principal@smce.edu / smce123`
+
+### Don't want to type? Double-click instead
+- **`setup.bat`** — first-time setup
+- **`dev.bat`** — run in dev mode
+- **`stop.bat`** — stop everything
+
+### If PowerShell blocks the scripts
+Run this **once** in PowerShell (your computer settings, only needed first time):
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+Type `Y` when prompted. After this, all `.ps1` scripts work.
+
+---
+
 ## Project structure
 
 ```
