@@ -12,6 +12,8 @@ backend/database/*.db-shm
 backend/database/*.db-wal
 backend/database/*.sqlite*
 backend/database/backups/
+backend/database/*.bak*
+*.db.bak*
 
 # ─── Python ─────────────────────────────────────────────────────
 backend/venv/
@@ -27,6 +29,16 @@ frontend/dist/
 frontend/.vite/
 frontend/*.local
 npm-debug.log*
+
+# ─── TS build cache (regenerated on build) ──────────────────────
+*.tsbuildinfo
+
+# ─── Generated demo decks (regenerate via generate_demo_deck.py) ─
+*.pptx
+*.pdf
+
+# ─── Local scratch / throwaway scripts ──────────────────────────
+test_py.ps1
 
 # ─── User uploads (per-deployment) ──────────────────────────────
 backend/static/uploads/
