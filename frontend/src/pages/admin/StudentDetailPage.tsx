@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { adminApi } from '@/api/admin';
@@ -168,6 +169,9 @@ export function StudentDetailPage() {
           </div>
         )}
       </div>
+
+      {/* ── 3.5) Day-wise period view ─────────────────────────────────── */}
+      <DaywiseAttendance studentId={studentId} />
 
       {/* ── 4) Recent attendance (50 most recent) ─────────────────────── */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -352,6 +356,149 @@ function ClassHistorySection({ studentId }: { studentId: number }) {
             </tbody>
           </table>
         </div>
+      )}
+    </div>
+  );
+}
+
+const PERIOD_COLOR: Record<string, string> = {
+  present: 'var(--success)',
+  late: 'var(--warning)',
+  absent: 'var(--danger)',
+  not_marked: '#cbd5e1',
+  leave: '#94a3b8',
+  excused: '#94a3b8',
+};
+
+function DaywiseAttendance({ studentId }: { studentId: number }) {
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['admin', 'student-day', studentId, date],
+    queryFn: () => adminApi.studentDayDetail(studentId, date),
+  });
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 12,
+          marginBottom: 12,
+        }}
+      >
+        <h3 style={{ margin: 0 }}>
+          <i className="fas fa-table-list" style={{ color: 'var(--primary)', marginRight: 8 }} />
+          Day-wise period attendance
+        </h3>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input
+            type="date"
+            className="form-control"
+            value={date}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => setDate(e.target.value)}
+            style={{ maxWidth: 180 }}
+          />
+          <button
+            type="button"
+            className="btn btn-sm btn-secondary"
+            onClick={() => {
+              const d = new Date(date);
+              d.setDate(d.getDate() - 1);
+              setDate(d.toISOString().slice(0, 10));
+            }}
+            title="Previous day"
+          >
+            <i className="fas fa-chevron-left" />
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-secondary"
+            onClick={() => {
+              const d = new Date(date);
+              d.setDate(d.getDate() + 1);
+              const next = d.toISOString().slice(0, 10);
+              if (next <= new Date().toISOString().slice(0, 10)) setDate(next);
+            }}
+            title="Next day"
+          >
+            <i className="fas fa-chevron-right" />
+          </button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <p className="text-muted" style={{ margin: 0 }}>Loading…</p>
+      ) : error || !data ? (
+        <p style={{ color: 'var(--danger)', margin: 0 }}>{apiErrorMessage(error)}</p>
+      ) : (
+        <>
+          <div
+            style={{
+              marginBottom: 12,
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+              fontSize: '0.85rem',
+            }}
+          >
+            <span className="text-muted">{data.day_name}</span>
+            <span>·</span>
+            <span className="badge badge-success">{data.counts.present} present</span>
+            <span className="badge badge-warning">{data.counts.late} late</span>
+            <span className="badge badge-danger">{data.counts.absent} absent</span>
+            <span className="badge badge-neutral">{data.counts.not_marked} not marked</span>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 70 }}>Period</th>
+                  <th>Subject</th>
+                  <th>Teacher</th>
+                  <th>Status</th>
+                  <th>Remarks</th>
+                  <th>Marked by</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.period_list.map((p) => (
+                  <tr key={p.period_no}>
+                    <td>
+                      <div
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 8,
+                          background: PERIOD_COLOR[p.status] ?? '#cbd5e1',
+                          color: p.status === 'not_marked' ? '#64748b' : 'white',
+                          fontWeight: 700,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.85rem',
+                        }}
+                        title={p.status}
+                      >
+                        P{p.period_no}
+                      </div>
+                    </td>
+                    <td>{p.subject_name ?? <span className="text-muted">—</span>}</td>
+                    <td className="text-sm text-muted">{p.teacher_name ?? '—'}</td>
+                    <td>{statusBadge(p.status === 'not_marked' ? 'not marked' : p.status)}</td>
+                    <td>{p.remarks ?? <span className="text-muted">—</span>}</td>
+                    <td className="text-sm text-muted">{p.marked_by_name ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

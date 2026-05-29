@@ -149,6 +149,161 @@ def report_card():
     return jsonify({'exams': _rows(exams), 'results': results})
 
 
+@api_student_bp.route('/diary', methods=['GET'])
+@login_required(roles=ROLES)
+def student_diary():
+    """School-wide announcements + diary entries for this student's class."""
+    uid = _uid()
+    db = get_db()
+    info = db.execute('''
+        SELECT u.school_id, sc.class_id
+        FROM users u
+        LEFT JOIN student_classes sc ON sc.student_id = u.id
+        WHERE u.id=?
+    ''', (uid,)).fetchone()
+    if not info:
+        db.close()
+        return jsonify({'entries': []})
+
+    sid = info['school_id']
+    class_id = info['class_id']
+
+    if class_id:
+        rows = db.execute('''
+            SELECT d.id, d.scope, d.class_id, d.subject_id, d.title, d.content, d.link,
+                   d.entry_date, d.created_at,
+                   c.name AS class_name, c.section,
+                   s.name AS subject_name,
+                   u.name AS posted_by_name, u.role AS posted_by_role
+            FROM diary_entries d
+            LEFT JOIN classes c ON c.id = d.class_id
+            LEFT JOIN subjects s ON s.id = d.subject_id
+            LEFT JOIN users u ON u.id = d.posted_by
+            WHERE d.school_id=? AND (d.scope='school' OR d.class_id=?)
+            ORDER BY d.entry_date DESC, d.id DESC
+            LIMIT 100
+        ''', (sid, class_id)).fetchall()
+    else:
+        rows = db.execute('''
+            SELECT d.id, d.scope, d.class_id, d.subject_id, d.title, d.content, d.link,
+                   d.entry_date, d.created_at,
+                   NULL AS class_name, NULL AS section, NULL AS subject_name,
+                   u.name AS posted_by_name, u.role AS posted_by_role
+            FROM diary_entries d
+            LEFT JOIN users u ON u.id = d.posted_by
+            WHERE d.school_id=? AND d.scope='school'
+            ORDER BY d.entry_date DESC, d.id DESC
+            LIMIT 100
+        ''', (sid,)).fetchall()
+    db.close()
+    return jsonify({'entries': _rows(rows)})
+
+
+@api_student_bp.route('/fees', methods=['GET'])
+@login_required(roles=ROLES)
+def my_fees():
+    """Student's own fee dues, monthly/annual breakdown, and payment history."""
+    uid = _uid()
+    db = get_db()
+    info = db.execute('''
+        SELECT u.id, u.name, u.school_id,
+               c.id AS class_id, c.name AS class_name, c.section, c.academic_year,
+               sch.name AS school_name, sch.address AS school_address, sch.phone AS school_phone, sch.logo AS school_logo
+        FROM users u
+        LEFT JOIN student_classes sc ON sc.student_id = u.id
+        LEFT JOIN classes c ON c.id = sc.class_id
+        LEFT JOIN schools sch ON sch.id = u.school_id
+        WHERE u.id=?
+    ''', (uid,)).fetchone()
+    if not info or not info['class_id']:
+        db.close()
+        return jsonify({
+            'student': _row(info) if info else None,
+            'heads': [], 'payments': [],
+            'totals': {'total': 0, 'paid': 0, 'due': 0},
+            'class_id': None, 'academic_year': None,
+        })
+
+    sid = info['school_id']
+    class_id = info['class_id']
+    academic_year = info['academic_year']
+
+    heads = db.execute('''
+        SELECT id, name, amount, cycle, academic_year
+        FROM fee_heads WHERE school_id=? AND class_id=?
+        ORDER BY cycle, name
+    ''', (sid, class_id)).fetchall()
+
+    payments = db.execute('''
+        SELECT p.id, p.fee_head_id, p.month, p.amount, p.paid_date, p.mode, p.receipt_no, p.remarks, p.created_at,
+               h.name AS head_name, h.cycle AS head_cycle,
+               u.name AS collected_by_name
+        FROM fee_payments p
+        JOIN fee_heads h ON h.id = p.fee_head_id
+        LEFT JOIN users u ON u.id = p.collected_by
+        WHERE p.school_id=? AND p.student_id=?
+        ORDER BY p.paid_date DESC, p.id DESC
+    ''', (sid, uid)).fetchall()
+
+    # Build monthly window for monthly heads (Jun..May academic year)
+    def _months_in_year(ay):
+        try:
+            start_year = int(ay.split('-', 1)[0])
+            return [f"{start_year + (m >= 12)}-{((m % 12) + 1):02d}" for m in range(5, 17)]
+        except Exception:
+            today = datetime.date.today()
+            return [f"{today.year + ((today.month - 1 + i) // 12)}-{(((today.month - 1 + i) % 12) + 1):02d}" for i in range(12)]
+
+    months = _months_in_year(academic_year or '')
+
+    head_summaries = []
+    grand_total = 0.0
+    grand_paid = 0.0
+    for h in heads:
+        head_dict = dict(h)
+        head_payments = [p for p in payments if p['fee_head_id'] == h['id']]
+        if h['cycle'] == 'monthly':
+            total = float(h['amount']) * 12
+            month_rows = []
+            for m in months:
+                m_paid = sum(float(p['amount']) for p in head_payments if p['month'] == m)
+                month_rows.append({
+                    'month': m,
+                    'amount': float(h['amount']),
+                    'paid': m_paid,
+                    'due': max(0.0, float(h['amount']) - m_paid),
+                    'status': 'paid' if m_paid >= float(h['amount']) else ('partial' if m_paid > 0 else 'pending'),
+                })
+            paid = sum(r['paid'] for r in month_rows)
+            head_dict['months'] = month_rows
+        else:
+            total = float(h['amount'])
+            paid = sum(float(p['amount']) for p in head_payments if (p['month'] is None or p['month'] == ''))
+            head_dict['months'] = None
+        head_dict['amount'] = float(h['amount'])
+        head_dict['total'] = total
+        head_dict['paid'] = paid
+        head_dict['due'] = max(0.0, total - paid)
+        head_dict['status'] = 'paid' if paid >= total else ('partial' if paid > 0 else 'pending')
+        head_summaries.append(head_dict)
+        grand_total += total
+        grand_paid += paid
+
+    db.close()
+    return jsonify({
+        'student': _row(info),
+        'heads': head_summaries,
+        'payments': _rows(payments),
+        'class_id': class_id,
+        'academic_year': academic_year,
+        'totals': {
+            'total': grand_total,
+            'paid': grand_paid,
+            'due': max(0.0, grand_total - grand_paid),
+        },
+    })
+
+
 @api_student_bp.route('/timetable', methods=['GET'])
 @login_required(roles=ROLES)
 def timetable():

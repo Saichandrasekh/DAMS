@@ -26,7 +26,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     { to: '/admin/subjects', label: 'Subjects', icon: 'fa-book' },
     { to: '/admin/exams', label: 'Exams', icon: 'fa-file-alt' },
     { to: '/admin/timetable', label: 'Timetable', icon: 'fa-calendar-alt' },
-    { to: '/admin/staff-attendance', label: 'Staff Attendance', icon: 'fa-user-check' },
+    { to: '/admin/fees', label: 'Fees', icon: 'fa-money-check-dollar' },
+    { to: '/admin/diary', label: 'Diary', icon: 'fa-book-open' },
     { to: '/admin/holidays', label: 'Holidays', icon: 'fa-umbrella-beach' },
     { to: '/admin/settings', label: 'Settings', icon: 'fa-gear' },
   ],
@@ -36,6 +37,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     { to: '/admin/students', label: 'Students', icon: 'fa-user-graduate' },
     { to: '/admin/teachers', label: 'Teachers', icon: 'fa-chalkboard-teacher' },
     { to: '/admin/batches', label: 'Batches', icon: 'fa-layer-group' },
+    { to: '/admin/fees', label: 'Fees', icon: 'fa-money-check-dollar' },
+    { to: '/admin/diary', label: 'Diary', icon: 'fa-book-open' },
   ],
   teacher: [
     { to: '/dashboard', label: 'Dashboard', icon: 'fa-gauge' },
@@ -44,15 +47,19 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     { to: '/teacher/marks-entry', label: 'Marks Entry', icon: 'fa-pen-to-square' },
     { to: '/teacher/attendance-report', label: 'Reports', icon: 'fa-chart-line' },
     { to: '/teacher/timetable', label: 'Timetable', icon: 'fa-calendar-alt' },
+    { to: '/teacher/diary', label: 'Diary', icon: 'fa-book-open' },
   ],
   student: [
     { to: '/dashboard', label: 'Dashboard', icon: 'fa-gauge' },
     { to: '/student/attendance', label: 'Attendance', icon: 'fa-user-check' },
     { to: '/student/timetable', label: 'Timetable', icon: 'fa-calendar-alt' },
     { to: '/student/report-card', label: 'Report Card', icon: 'fa-file-lines' },
+    { to: '/student/fees', label: 'My Fees', icon: 'fa-money-check-dollar' },
+    { to: '/student/diary', label: 'Diary', icon: 'fa-book-open' },
   ],
   parent: [
     { to: '/dashboard', label: 'Dashboard', icon: 'fa-gauge' },
+    { to: '/parent/diary', label: 'Diary', icon: 'fa-book-open' },
   ],
 };
 

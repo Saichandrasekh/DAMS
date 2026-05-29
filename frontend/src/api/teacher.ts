@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import type { DiaryEntry } from '@/types/admin';
 
 export interface TeacherAssignment {
   class_id: number;
@@ -42,6 +43,40 @@ export interface AttendanceReportRow {
   absent: number | null;
   late: number | null;
   percentage: number | null;
+}
+
+export type StaffStatus = 'present' | 'absent' | 'late' | 'half_day' | 'on_leave';
+
+export interface StaffCheckinResponse {
+  action: 'check_in' | 'check_out' | 'already_done';
+  message?: string;
+  error?: string;
+  check_in: string | null;
+  check_out: string | null;
+  status: StaffStatus;
+  date: string;
+}
+
+export interface AttendanceRecord {
+  date: string;
+  check_in: string | null;
+  check_out: string | null;
+  status: StaffStatus;
+  remarks: string | null;
+}
+
+export interface TeacherSelfAttendance {
+  today: (AttendanceRecord & { id?: number }) | null;
+  history: AttendanceRecord[];
+  month_summary: {
+    total_days?: number;
+    present?: number;
+    late?: number;
+    absent?: number;
+    on_leave?: number;
+    half_day?: number;
+  };
+  date: string;
 }
 
 export const teacherApi = {
@@ -110,9 +145,35 @@ export const teacherApi = {
     };
   },
 
-  async checkin(): Promise<{ time: string; message: string }> {
-    const res = await api.post<{ time: string; message: string }>('/teacher/staff-checkin');
+  async checkin(): Promise<StaffCheckinResponse> {
+    const res = await api.post<StaffCheckinResponse>('/teacher/staff-checkin');
     return res.data;
+  },
+
+  async myAttendance(): Promise<TeacherSelfAttendance> {
+    const res = await api.get<TeacherSelfAttendance>('/teacher/attendance-me');
+    return res.data;
+  },
+
+  async listDiary(filters: { scope?: 'school' | 'class'; class_id?: number; mine?: boolean } = {}): Promise<{
+    entries: DiaryEntry[];
+    my_classes: { id: number; name: string; section: string }[];
+  }> {
+    const qs = new URLSearchParams();
+    if (filters.scope) qs.append('scope', filters.scope);
+    if (filters.class_id) qs.append('class_id', String(filters.class_id));
+    if (filters.mine) qs.append('mine', '1');
+    const res = await api.get(`/teacher/diary${qs.toString() ? `?${qs}` : ''}`);
+    return res.data as { entries: DiaryEntry[]; my_classes: { id: number; name: string; section: string }[] };
+  },
+  async addDiary(input: { class_id: number; title: string; content: string; subject_id?: number; entry_date?: string; link?: string }): Promise<void> {
+    await api.post('/teacher/diary', input);
+  },
+  async updateDiary(id: number, input: { title?: string; content?: string; entry_date?: string; link?: string }): Promise<void> {
+    await api.put(`/teacher/diary/${id}`, input);
+  },
+  async deleteDiary(id: number): Promise<void> {
+    await api.delete(`/teacher/diary/${id}`);
   },
 
   async marksExams(): Promise<{ id: number; name: string; exam_date: string; is_published: number }[]> {

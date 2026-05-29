@@ -273,6 +273,66 @@ def init_db():
         )
     ''')
 
+    # ─── DIARY ENTRIES (school announcements + class diary) ─────────────────
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS diary_entries (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            school_id   INTEGER NOT NULL,
+            scope       TEXT NOT NULL CHECK(scope IN ('school','class')),
+            class_id    INTEGER,
+            subject_id  INTEGER,
+            title       TEXT NOT NULL,
+            content     TEXT NOT NULL,
+            link        TEXT,
+            entry_date  TEXT NOT NULL,
+            posted_by   INTEGER,
+            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(school_id)  REFERENCES schools(id) ON DELETE CASCADE,
+            FOREIGN KEY(class_id)   REFERENCES classes(id) ON DELETE CASCADE,
+            FOREIGN KEY(subject_id) REFERENCES subjects(id) ON DELETE SET NULL,
+            FOREIGN KEY(posted_by)  REFERENCES users(id) ON DELETE SET NULL
+        )
+    ''')
+
+    # ─── FEE HEADS (per class / academic year) ───────────────────────────────
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fee_heads (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            school_id   INTEGER NOT NULL,
+            class_id    INTEGER NOT NULL,
+            academic_year TEXT,
+            name        TEXT NOT NULL,
+            amount      REAL NOT NULL DEFAULT 0,
+            cycle       TEXT NOT NULL DEFAULT 'annual' CHECK(cycle IN ('annual','monthly')),
+            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(school_id) REFERENCES schools(id) ON DELETE CASCADE,
+            FOREIGN KEY(class_id)  REFERENCES classes(id) ON DELETE CASCADE
+        )
+    ''')
+
+    # ─── FEE PAYMENTS (one row per collection event) ─────────────────────────
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fee_payments (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            school_id   INTEGER NOT NULL,
+            student_id  INTEGER NOT NULL,
+            fee_head_id INTEGER NOT NULL,
+            month       TEXT,
+            amount      REAL NOT NULL,
+            paid_date   TEXT NOT NULL,
+            mode        TEXT NOT NULL DEFAULT 'cash' CHECK(mode IN ('cash','upi','cheque','card','bank_transfer','other')),
+            receipt_no  TEXT,
+            remarks     TEXT,
+            collected_by INTEGER,
+            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(school_id)   REFERENCES schools(id) ON DELETE CASCADE,
+            FOREIGN KEY(student_id)  REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(fee_head_id) REFERENCES fee_heads(id) ON DELETE CASCADE,
+            FOREIGN KEY(collected_by) REFERENCES users(id) ON DELETE SET NULL
+        )
+    ''')
+
     # ─── INDEXES FOR SCALABILITY (100+ SCHOOLS) ──────────────────────────────
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_school_role ON users(school_id, role)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_attendance_school_date ON student_attendance(class_id, date)")
@@ -287,6 +347,13 @@ def init_db():
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_timetable_slot_uniq ON timetable(class_id, day_of_week, period_no)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_promotions_student ON class_promotions(student_id, promoted_at)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_promotions_school ON class_promotions(school_id, promoted_at)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_fee_heads_school_class ON fee_heads(school_id, class_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_fee_payments_student ON fee_payments(student_id, paid_date)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_fee_payments_school ON fee_payments(school_id, paid_date)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_fee_payments_head ON fee_payments(fee_head_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_diary_school_date ON diary_entries(school_id, entry_date)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_diary_class ON diary_entries(class_id, entry_date)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_diary_posted_by ON diary_entries(posted_by, entry_date)")
     # Roll numbers must be unique within a class (when set — NULLs allowed multiple times)
     cursor.execute('''
         CREATE UNIQUE INDEX IF NOT EXISTS idx_student_classes_class_roll
@@ -296,4 +363,4 @@ def init_db():
 
     conn.commit()
     conn.close()
-    print("✅ Database initialized successfully.")
+    print("Database initialized successfully.")

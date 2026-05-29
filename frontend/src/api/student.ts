@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import type { DiaryEntry, FeeStudentDetail } from '@/types/admin';
 
 export interface StudentInfo {
   id: number;
@@ -92,5 +93,15 @@ export const studentApi = {
       periods: number;
       data: Record<string, { subject_name: string; teacher_name: string | null }>;
     };
+  },
+
+  async fees(): Promise<FeeStudentDetail> {
+    const res = await api.get<FeeStudentDetail>('/student/fees');
+    return res.data;
+  },
+
+  async diary(): Promise<{ entries: DiaryEntry[] }> {
+    const res = await api.get<{ entries: DiaryEntry[] }>('/student/diary');
+    return res.data;
   },
 };

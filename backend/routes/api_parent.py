@@ -70,6 +70,60 @@ def dashboard():
     })
 
 
+@api_parent_bp.route('/diary', methods=['GET'])
+@login_required(roles=ROLES)
+def parent_diary():
+    """School-wide announcements + entries for any of the parent's children's classes."""
+    pid = _uid()
+    db = get_db()
+
+    parent = db.execute("SELECT school_id FROM users WHERE id=?", (pid,)).fetchone()
+    if not parent:
+        db.close()
+        return jsonify({'entries': []})
+    sid = parent['school_id']
+
+    children = db.execute('''
+        SELECT DISTINCT sc.class_id, c.name AS class_name, c.section
+        FROM parent_student ps
+        JOIN student_classes sc ON sc.student_id = ps.student_id
+        JOIN classes c ON c.id = sc.class_id
+        WHERE ps.parent_id = ?
+    ''', (pid,)).fetchall()
+    class_ids = [c['class_id'] for c in children]
+
+    if class_ids:
+        placeholders = ','.join(['?'] * len(class_ids))
+        rows = db.execute(f'''
+            SELECT d.id, d.scope, d.class_id, d.subject_id, d.title, d.content, d.link,
+                   d.entry_date, d.created_at,
+                   c.name AS class_name, c.section,
+                   s.name AS subject_name,
+                   u.name AS posted_by_name, u.role AS posted_by_role
+            FROM diary_entries d
+            LEFT JOIN classes c ON c.id = d.class_id
+            LEFT JOIN subjects s ON s.id = d.subject_id
+            LEFT JOIN users u ON u.id = d.posted_by
+            WHERE d.school_id=? AND (d.scope='school' OR d.class_id IN ({placeholders}))
+            ORDER BY d.entry_date DESC, d.id DESC
+            LIMIT 100
+        ''', (sid, *class_ids)).fetchall()
+    else:
+        rows = db.execute('''
+            SELECT d.id, d.scope, d.class_id, d.subject_id, d.title, d.content, d.link,
+                   d.entry_date, d.created_at,
+                   NULL AS class_name, NULL AS section, NULL AS subject_name,
+                   u.name AS posted_by_name, u.role AS posted_by_role
+            FROM diary_entries d
+            LEFT JOIN users u ON u.id = d.posted_by
+            WHERE d.school_id=? AND d.scope='school'
+            ORDER BY d.entry_date DESC, d.id DESC
+            LIMIT 100
+        ''', (sid,)).fetchall()
+    db.close()
+    return jsonify({'entries': _rows(rows), 'children_classes': _rows(children)})
+
+
 @api_parent_bp.route('/child/<int:student_id>', methods=['GET'])
 @login_required(roles=ROLES)
 def child_report(student_id):

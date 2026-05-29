@@ -53,10 +53,14 @@ Section '1/6  Checking prerequisites'
 
 # Python
 $python = $null
-foreach ($cmd in @('py -3', 'python', 'python3')) {
+foreach ($cmd in @('python', 'py -3', 'python3')) {
     try {
         $parts = $cmd -split ' '
-        $ver = & $parts[0] $parts[1..($parts.Count-1)] --version 2>&1
+        if ($parts.Count -gt 1) {
+            $ver = & $parts[0] $parts[1..($parts.Count-1)] --version 2>&1
+        } else {
+            $ver = & $parts[0] --version 2>&1
+        }
         if ($LASTEXITCODE -eq 0 -and $ver -match 'Python (\d+)\.(\d+)') {
             $major = [int]$Matches[1]; $minor = [int]$Matches[2]
             if ($major -eq 3 -and $minor -ge 9) {
@@ -102,7 +106,11 @@ if (Test-Path $venvPy) {
 } else {
     Write-Host '  Creating venv...'
     $parts = $python -split ' '
-    & $parts[0] $parts[1..($parts.Count-1)] -m venv $venv
+    if ($parts.Count -gt 1) {
+        & $parts[0] $parts[1..($parts.Count-1)] -m venv $venv
+    } else {
+        & $parts[0] -m venv $venv
+    }
     if (-not (Test-Path $venvPy)) { Fail 'venv creation failed' }
     Ok 'venv created'
 }

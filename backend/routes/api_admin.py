@@ -58,6 +58,7 @@ def list_students():
     db = get_db()
     f_class = request.args.get('class_id')
     f_status = request.args.get('status')
+    f_date = request.args.get('date')  # optional YYYY-MM-DD
 
     query = '''
         SELECT u.id, u.name, u.email, u.phone, u.gender, u.dob, u.address, u.is_active,
@@ -77,10 +78,47 @@ def list_students():
         query += " AND u.is_active = 0"
     query += " ORDER BY c.name, c.section, sc.roll_no, u.name"
 
-    students = db.execute(query, params).fetchall()
+    students = [dict(r) for r in db.execute(query, params).fetchall()]
+
+    # If a date is given, attach per-student attendance summary for that date
+    if f_date and students:
+        ids = [s['id'] for s in students]
+        placeholders = ','.join(['?'] * len(ids))
+        att_rows = db.execute(f'''
+            SELECT student_id,
+                   SUM(CASE WHEN status='present' THEN 1 ELSE 0 END) AS present,
+                   SUM(CASE WHEN status='late'    THEN 1 ELSE 0 END) AS late,
+                   SUM(CASE WHEN status='absent'  THEN 1 ELSE 0 END) AS absent,
+                   COUNT(*) AS marked
+            FROM student_attendance
+            WHERE date=? AND student_id IN ({placeholders})
+            GROUP BY student_id
+        ''', (f_date, *ids)).fetchall()
+        by_id = {r['student_id']: r for r in att_rows}
+        for s in students:
+            rec = by_id.get(s['id'])
+            if not rec or rec['marked'] == 0:
+                s['date_status'] = 'not_marked'
+                s['date_present'] = 0
+                s['date_late'] = 0
+                s['date_absent'] = 0
+                s['date_marked'] = 0
+            else:
+                # Best status across periods: present > late > absent
+                if rec['present'] > 0:
+                    s['date_status'] = 'present'
+                elif rec['late'] > 0:
+                    s['date_status'] = 'late'
+                else:
+                    s['date_status'] = 'absent'
+                s['date_present'] = rec['present'] or 0
+                s['date_late'] = rec['late'] or 0
+                s['date_absent'] = rec['absent'] or 0
+                s['date_marked'] = rec['marked'] or 0
+
     classes = db.execute("SELECT id, name, section FROM classes WHERE school_id=? ORDER BY name, section", (sid,)).fetchall()
     db.close()
-    return jsonify({'students': _rows(students), 'classes': _rows(classes)})
+    return jsonify({'students': students, 'classes': _rows(classes), 'date': f_date})
 
 
 @api_admin_bp.route('/students', methods=['POST'])
@@ -233,6 +271,86 @@ def student_details(student_id):
     })
 
 
+@api_admin_bp.route('/students/<int:student_id>/day', methods=['GET'])
+@login_required(roles=ROLES)
+def student_day_detail(student_id):
+    """One student's period-by-period attendance for a specific date.
+    Useful for 'check who was absent in which periods' from the student detail page.
+    """
+    sid = _sid()
+    date = request.args.get('date') or datetime.date.today().isoformat()
+    db = get_db()
+
+    student = db.execute('''
+        SELECT u.id, u.name, sc.roll_no,
+               c.id AS class_id, c.name AS class_name, c.section
+        FROM users u
+        LEFT JOIN student_classes sc ON sc.student_id = u.id
+        LEFT JOIN classes c ON c.id = sc.class_id
+        WHERE u.id=? AND u.school_id=? AND u.role='student'
+    ''', (student_id, sid)).fetchone()
+    if not student:
+        db.close()
+        return jsonify({'error': 'Student not found'}), 404
+
+    school = db.execute("SELECT periods_per_day FROM schools WHERE id=?", (sid,)).fetchone()
+    periods = (school['periods_per_day'] if school and school['periods_per_day'] else 8)
+
+    # All recorded attendance for that student on that date
+    rec_rows = db.execute('''
+        SELECT sa.period_no, sa.status, sa.remarks, sa.subject_id,
+               s.name AS subject_name, u.name AS marked_by_name
+        FROM student_attendance sa
+        LEFT JOIN subjects s ON s.id = sa.subject_id
+        LEFT JOIN users u ON u.id = sa.marked_by
+        WHERE sa.student_id=? AND sa.date=?
+    ''', (student_id, date)).fetchall()
+    by_period = {r['period_no']: r for r in rec_rows}
+
+    # Today's timetable for context (so unmarked periods show the expected subject)
+    day_name = datetime.date.fromisoformat(date).strftime('%A')
+    tt_rows = []
+    if student['class_id']:
+        tt_rows = db.execute('''
+            SELECT t.period_no, s.name AS subject_name, u.name AS teacher_name
+            FROM timetable t
+            JOIN subjects s ON s.id = t.subject_id
+            LEFT JOIN users u ON u.id = s.teacher_id
+            WHERE t.class_id=? AND t.day_of_week=?
+            ORDER BY t.period_no
+        ''', (student['class_id'], day_name)).fetchall()
+    timetable_by_period = {r['period_no']: r for r in tt_rows}
+
+    period_list = []
+    counts = {'present': 0, 'late': 0, 'absent': 0, 'not_marked': 0}
+    for p in range(1, periods + 1):
+        rec = by_period.get(p)
+        tt = timetable_by_period.get(p)
+        status = (rec['status'] if rec else None) or 'not_marked'
+        period_list.append({
+            'period_no': p,
+            'status': status,
+            'subject_name': (rec['subject_name'] if rec else None) or (tt['subject_name'] if tt else None),
+            'teacher_name': (tt['teacher_name'] if tt else None),
+            'remarks': rec['remarks'] if rec else None,
+            'marked_by_name': rec['marked_by_name'] if rec else None,
+        })
+        if status in counts:
+            counts[status] += 1
+        else:
+            counts['not_marked'] += 1
+
+    db.close()
+    return jsonify({
+        'student': _row(student),
+        'date': date,
+        'day_name': day_name,
+        'periods': periods,
+        'period_list': period_list,
+        'counts': counts,
+    })
+
+
 @api_admin_bp.route('/students/<int:student_id>', methods=['PUT'])
 @login_required(roles=ROLES)
 def update_student(student_id):
@@ -291,7 +409,10 @@ def list_teachers():
     db = get_db()
     teachers = db.execute('''
         SELECT u.id, u.name, u.email, u.phone, u.gender, u.is_active,
-               (SELECT GROUP_CONCAT(s.name, ', ') FROM subjects s WHERE s.teacher_id=u.id) as subjects
+               (SELECT GROUP_CONCAT(DISTINCT s.name)
+                  FROM subjects s WHERE s.teacher_id=u.id) AS subjects,
+               (SELECT COUNT(DISTINCT s.class_id)
+                  FROM subjects s WHERE s.teacher_id=u.id) AS class_count
         FROM users u WHERE u.school_id=? AND u.role='teacher'
         ORDER BY u.name
     ''', (sid,)).fetchall()
@@ -770,7 +891,7 @@ def attendance_overview():
 @api_admin_bp.route('/attendance-overview/class/<int:class_id>', methods=['GET'])
 @login_required(roles=ROLES)
 def attendance_overview_class(class_id):
-    """Per-student list grouped by status for one class on a given date."""
+    """Per-student list grouped by status + per-period grid for one class on a date."""
     sid = _sid()
     date = request.args.get('date') or datetime.date.today().isoformat()
     db = get_db()
@@ -783,6 +904,9 @@ def attendance_overview_class(class_id):
         db.close()
         return jsonify({'error': 'Class not found'}), 404
 
+    school = db.execute("SELECT periods_per_day FROM schools WHERE id=?", (sid,)).fetchone()
+    periods = (school['periods_per_day'] if school and school['periods_per_day'] else 8)
+
     rows = db.execute('''
         SELECT u.id, u.name, sc.roll_no, u.phone,
                COALESCE(MAX(CASE
@@ -790,7 +914,6 @@ def attendance_overview_class(class_id):
                    WHEN sa.status='late'    THEN 2
                    WHEN sa.status='absent'  THEN 1
                END), 0) AS code,
-               GROUP_CONCAT(DISTINCT sa.subject_id) AS subject_ids,
                (SELECT GROUP_CONCAT(remarks, ' | ')
                 FROM student_attendance
                 WHERE student_id=u.id AND class_id=sc.class_id AND date=?
@@ -806,6 +929,36 @@ def attendance_overview_class(class_id):
         ORDER BY sc.roll_no, u.name
     ''', (date, date, class_id)).fetchall()
 
+    # Per-student per-period detail
+    period_rows = db.execute('''
+        SELECT sa.student_id, sa.period_no, sa.status, sa.subject_id, sa.remarks,
+               s.name AS subject_name
+        FROM student_attendance sa
+        LEFT JOIN subjects s ON s.id = sa.subject_id
+        WHERE sa.class_id=? AND sa.date=?
+    ''', (class_id, date)).fetchall()
+
+    by_student_period = {}
+    for r in period_rows:
+        key = (r['student_id'], r['period_no'])
+        by_student_period[key] = {
+            'status': r['status'],
+            'subject_name': r['subject_name'],
+            'remarks': r['remarks'],
+        }
+
+    # Today's timetable so we know which subject is in each period
+    day_name = datetime.date.fromisoformat(date).strftime('%A')
+    tt_rows = db.execute('''
+        SELECT t.period_no, s.name AS subject_name
+        FROM timetable t
+        JOIN subjects s ON s.id = t.subject_id
+        WHERE t.class_id=? AND t.day_of_week=?
+        ORDER BY t.period_no
+    ''', (class_id, day_name)).fetchall()
+    timetable_by_period = {r['period_no']: r['subject_name'] for r in tt_rows}
+
+    students = []
     buckets = {'present': [], 'late': [], 'absent': [], 'not_marked': []}
     for r in rows:
         bucket = (
@@ -814,12 +967,76 @@ def attendance_overview_class(class_id):
             'absent'     if r['code'] == 1 else
             'not_marked'
         )
-        buckets[bucket].append({
+        student_entry = {
             'id': r['id'], 'name': r['name'], 'roll_no': r['roll_no'],
             'phone': r['phone'], 'remarks': r['remarks'],
+        }
+        buckets[bucket].append(student_entry)
+
+        # Build per-period array
+        per_period = []
+        per_period_counts = {'present': 0, 'late': 0, 'absent': 0, 'not_marked': 0}
+        for p in range(1, periods + 1):
+            rec = by_student_period.get((r['id'], p))
+            status = (rec['status'] if rec else None) or 'not_marked'
+            per_period.append({
+                'period_no': p,
+                'status': status,
+                'subject_name': (rec['subject_name'] if rec else None) or timetable_by_period.get(p),
+                'remarks': rec['remarks'] if rec else None,
+            })
+            if status in per_period_counts:
+                per_period_counts[status] += 1
+            else:
+                per_period_counts['not_marked'] += 1
+        students.append({
+            **student_entry,
+            'overall_status': bucket,
+            'periods': per_period,
+            'present_count': per_period_counts['present'],
+            'late_count': per_period_counts['late'],
+            'absent_count': per_period_counts['absent'],
+            'not_marked_count': per_period_counts['not_marked'],
         })
+
     db.close()
-    return jsonify({'class': _row(cls), 'date': date, 'buckets': buckets})
+    return jsonify({
+        'class': _row(cls),
+        'date': date,
+        'periods': periods,
+        'timetable': timetable_by_period,
+        'buckets': buckets,
+        'students': students,
+    })
+
+
+@api_admin_bp.route('/attendance-overview/staff', methods=['GET'])
+@login_required(roles=ROLES)
+def attendance_overview_staff():
+    """All active staff with today's attendance status (joined view, for inline display)."""
+    sid = _sid()
+    date = request.args.get('date') or datetime.date.today().isoformat()
+    db = get_db()
+    rows = db.execute('''
+        SELECT u.id AS staff_id, u.name AS staff_name, u.role, u.phone,
+               sa.status, sa.check_in, sa.check_out, sa.remarks, sa.leave_type
+        FROM users u
+        LEFT JOIN staff_attendance sa
+          ON sa.staff_id = u.id AND sa.date = ? AND sa.school_id = u.school_id
+        WHERE u.school_id=? AND u.role IN ('teacher','admin','principal') AND u.is_active=1
+        ORDER BY u.role, u.name
+    ''', (date, sid)).fetchall()
+    rows = _rows(rows)
+    totals = {'total': len(rows), 'present': 0, 'late': 0, 'absent': 0,
+              'on_leave': 0, 'half_day': 0, 'not_marked': 0}
+    for r in rows:
+        s = r.get('status') or 'not_marked'
+        if s in totals:
+            totals[s] += 1
+        else:
+            totals['not_marked'] += 1
+    db.close()
+    return jsonify({'date': date, 'staff': rows, 'totals': totals})
 
 
 # ─── BATCHES (group students by academic year) ──────────────────────────────
@@ -871,6 +1088,87 @@ def list_batches():
 
     db.close()
     return jsonify({'batches': batches})
+
+
+@api_admin_bp.route('/graduates', methods=['GET'])
+@login_required(roles=ROLES)
+def list_graduates():
+    """All students who have been graduated, grouped by graduation year.
+
+    A graduation row is a class_promotions entry where to_class_id IS NULL.
+    Uses the most-recent graduation row per student (in case a student was
+    re-enrolled and re-graduated).
+    """
+    sid = _sid()
+    db = get_db()
+    rows = db.execute('''
+        WITH grad AS (
+            SELECT student_id, MAX(promoted_at) AS promoted_at
+            FROM class_promotions
+            WHERE school_id=? AND to_class_id IS NULL
+            GROUP BY student_id
+        )
+        SELECT
+            u.id, u.name, u.email, u.phone, u.gender, u.is_active,
+            cp.from_class_id, cp.from_academic_year,
+            cp.old_roll_no, cp.reason, cp.promoted_at,
+            pb.name AS promoted_by_name,
+            fc.name AS from_class_name, fc.section AS from_section
+        FROM grad g
+        JOIN class_promotions cp
+          ON cp.student_id = g.student_id
+         AND cp.promoted_at = g.promoted_at
+         AND cp.to_class_id IS NULL
+        JOIN users u ON u.id = g.student_id
+        LEFT JOIN classes fc ON fc.id = cp.from_class_id
+        LEFT JOIN users pb ON pb.id = cp.promoted_by
+        WHERE cp.school_id=?
+        ORDER BY cp.promoted_at DESC, u.name
+    ''', (sid, sid)).fetchall()
+
+    graduates = _rows(rows)
+
+    # Bucket by graduation year (extracted from from_academic_year, falling back to promoted_at year)
+    grouped = {}
+    for g in graduates:
+        year = g.get('from_academic_year') or (
+            (g.get('promoted_at') or '')[:4] if g.get('promoted_at') else None
+        )
+        key = year or '(unknown)'
+        grouped.setdefault(key, []).append(g)
+
+    groups = []
+    for year, students in sorted(grouped.items(), reverse=True):
+        groups.append({
+            'academic_year': None if year == '(unknown)' else year,
+            'count': len(students),
+            'students': students,
+        })
+
+    db.close()
+    return jsonify({'groups': groups, 'total': len(graduates)})
+
+
+@api_admin_bp.route('/graduates/<int:student_id>/reactivate', methods=['POST'])
+@login_required(roles=ROLES)
+def reactivate_graduate(student_id):
+    """Reactivate a graduated student account (sets is_active=1).
+    Does NOT re-enroll them in a class — admin must assign a class via the Students page.
+    """
+    sid = _sid()
+    db = get_db()
+    student = db.execute(
+        "SELECT id, name FROM users WHERE id=? AND school_id=? AND role='student'",
+        (student_id, sid),
+    ).fetchone()
+    if not student:
+        db.close()
+        return jsonify({'error': 'Student not found'}), 404
+    db.execute("UPDATE users SET is_active=1 WHERE id=? AND school_id=?", (student_id, sid))
+    db.commit()
+    db.close()
+    log_action(sid, _uid(), 'REACTIVATE_GRADUATE', f"{student['name']} (api)")
+    return jsonify({'message': f"{student['name']} reactivated. Assign them to a class from the Students page."})
 
 
 @api_admin_bp.route('/batches/<path:year>', methods=['GET'])
@@ -1142,6 +1440,113 @@ def mark_staff_attendance():
         db.close()
 
 
+# ─── TEACHERS ATTENDANCE REPORT (per-teacher summary + detail) ──────────────
+@api_admin_bp.route('/teachers-attendance-report', methods=['GET'])
+@login_required(roles=ROLES)
+def teachers_attendance_report():
+    """Per-teacher attendance summary over a date range. Defaults to current month."""
+    sid = _sid()
+    today = datetime.date.today()
+    default_from = today.replace(day=1).isoformat()
+    from_date = request.args.get('from_date') or default_from
+    to_date = request.args.get('to_date') or today.isoformat()
+    teacher_id = request.args.get('teacher_id', type=int)
+
+    db = get_db()
+    teachers = db.execute(
+        "SELECT id, name, email, phone FROM users WHERE school_id=? AND role='teacher' AND is_active=1 ORDER BY name",
+        (sid,),
+    ).fetchall()
+
+    # Working days in range = total dates minus holidays. Sundays are also excluded.
+    holidays = {h['date'] for h in db.execute(
+        "SELECT date FROM holidays WHERE school_id=? AND date BETWEEN ? AND ?",
+        (sid, from_date, to_date),
+    ).fetchall()}
+    try:
+        d_from = datetime.date.fromisoformat(from_date)
+        d_to = datetime.date.fromisoformat(to_date)
+    except ValueError:
+        db.close()
+        return jsonify({'error': 'invalid date format (use YYYY-MM-DD)'}), 400
+    if d_from > d_to:
+        db.close()
+        return jsonify({'error': 'from_date must be <= to_date'}), 400
+
+    working_days = 0
+    d = d_from
+    while d <= d_to:
+        if d.weekday() != 6 and d.isoformat() not in holidays:  # 6 = Sunday
+            working_days += 1
+        d += datetime.timedelta(days=1)
+
+    summaries = []
+    for t in teachers:
+        row = db.execute(
+            '''SELECT
+                  COUNT(*) AS marked,
+                  SUM(CASE WHEN status='present' THEN 1 ELSE 0 END) AS present,
+                  SUM(CASE WHEN status='late' THEN 1 ELSE 0 END) AS late,
+                  SUM(CASE WHEN status='absent' THEN 1 ELSE 0 END) AS absent,
+                  SUM(CASE WHEN status='on_leave' THEN 1 ELSE 0 END) AS on_leave,
+                  SUM(CASE WHEN status='half_day' THEN 1 ELSE 0 END) AS half_day,
+                  MAX(date) AS last_date
+               FROM staff_attendance
+               WHERE staff_id=? AND school_id=? AND date BETWEEN ? AND ?''',
+            (t['id'], sid, from_date, to_date),
+        ).fetchone()
+        present = (row['present'] or 0) + (row['late'] or 0)  # late still counts as present
+        marked = row['marked'] or 0
+        # Attendance % = present (incl. late) / days where attendance was actually recorded.
+        # "Not marked" days are tracked separately as a data-quality signal, not a penalty.
+        pct = round(100.0 * present / marked, 1) if marked else 0.0
+        # Coverage % = how completely is this teacher's attendance being tracked?
+        coverage = round(100.0 * marked / working_days, 1) if working_days else 0.0
+        summaries.append({
+            'id': t['id'],
+            'name': t['name'],
+            'email': t['email'],
+            'phone': t['phone'],
+            'marked': marked,
+            'present': row['present'] or 0,
+            'late': row['late'] or 0,
+            'absent': row['absent'] or 0,
+            'on_leave': row['on_leave'] or 0,
+            'half_day': row['half_day'] or 0,
+            'not_marked': max(0, working_days - marked),
+            'pct': pct,
+            'coverage': coverage,
+            'last_date': row['last_date'],
+        })
+
+    detail = None
+    if teacher_id:
+        records = db.execute(
+            '''SELECT date, check_in, check_out, status, remarks
+               FROM staff_attendance
+               WHERE staff_id=? AND school_id=? AND date BETWEEN ? AND ?
+               ORDER BY date DESC''',
+            (teacher_id, sid, from_date, to_date),
+        ).fetchall()
+        teacher = db.execute(
+            "SELECT id, name, email, phone FROM users WHERE id=? AND school_id=?",
+            (teacher_id, sid),
+        ).fetchone()
+        detail = {
+            'teacher': _row(teacher),
+            'records': _rows(records),
+        }
+
+    db.close()
+    return jsonify({
+        'from_date': from_date,
+        'to_date': to_date,
+        'working_days': working_days,
+        'summaries': summaries,
+        'detail': detail,
+    })
+
+
 # ─── TIMETABLE ───────────────────────────────────────────────────────────────
 @api_admin_bp.route('/timetable', methods=['GET'])
 @login_required(roles=ROLES)
@@ -1287,3 +1692,574 @@ def purge_inactive_students():
         log_action(sid, _uid(), 'PURGE_INACTIVE_STUDENTS', f'Removed {count} students (api)')
     db.close()
     return jsonify({'count': count, 'message': f'Removed {count} inactive students'})
+
+
+# ─── DIARY: school-wide announcements + oversight ───────────────────────────
+@api_admin_bp.route('/diary', methods=['GET'])
+@login_required(roles=ROLES)
+def list_diary():
+    """List diary entries. Filters: scope, class_id, from_date, to_date, posted_by_me.
+    Admin sees all (school + class). Use scope=school to see only announcements.
+    """
+    sid = _sid()
+    scope = request.args.get('scope')
+    class_id = request.args.get('class_id', type=int)
+    from_date = request.args.get('from_date')
+    to_date = request.args.get('to_date')
+
+    db = get_db()
+    query = '''
+        SELECT d.id, d.scope, d.class_id, d.subject_id, d.title, d.content, d.link,
+               d.entry_date, d.posted_by, d.created_at, d.updated_at,
+               c.name AS class_name, c.section,
+               s.name AS subject_name,
+               u.name AS posted_by_name, u.role AS posted_by_role
+        FROM diary_entries d
+        LEFT JOIN classes c ON c.id = d.class_id
+        LEFT JOIN subjects s ON s.id = d.subject_id
+        LEFT JOIN users u ON u.id = d.posted_by
+        WHERE d.school_id=?
+    '''
+    params = [sid]
+    if scope in ('school', 'class'):
+        query += ' AND d.scope=?'
+        params.append(scope)
+    if class_id:
+        query += ' AND d.class_id=?'
+        params.append(class_id)
+    if from_date:
+        query += ' AND d.entry_date>=?'
+        params.append(from_date)
+    if to_date:
+        query += ' AND d.entry_date<=?'
+        params.append(to_date)
+    query += ' ORDER BY d.entry_date DESC, d.id DESC'
+
+    rows = db.execute(query, params).fetchall()
+    classes = db.execute(
+        "SELECT id, name, section FROM classes WHERE school_id=? ORDER BY name, section",
+        (sid,),
+    ).fetchall()
+    db.close()
+    return jsonify({'entries': _rows(rows), 'classes': _rows(classes)})
+
+
+@api_admin_bp.route('/diary', methods=['POST'])
+@login_required(roles=ROLES)
+def add_diary():
+    """Admin/principal posts. Defaults to scope='school' (announcement).
+    Can also post a class-level entry by providing class_id.
+    """
+    sid = _sid()
+    data = request.get_json(silent=True) or {}
+    title = (data.get('title') or '').strip()
+    content = (data.get('content') or '').strip()
+    if not title or not content:
+        return jsonify({'error': 'title and content are required'}), 400
+
+    class_id = data.get('class_id')
+    scope = 'class' if class_id else 'school'
+    entry_date = (data.get('entry_date') or datetime.date.today().isoformat()).strip()
+    link = (data.get('link') or '').strip() or None
+
+    db = get_db()
+    if class_id:
+        cls = db.execute('SELECT id FROM classes WHERE id=? AND school_id=?',
+                         (class_id, sid)).fetchone()
+        if not cls:
+            db.close()
+            return jsonify({'error': 'Class not found'}), 404
+
+    cursor = db.execute('''
+        INSERT INTO diary_entries (school_id, scope, class_id, subject_id, title, content, link, entry_date, posted_by)
+        VALUES (?,?,?,?,?,?,?,?,?)
+    ''', (sid, scope, class_id, data.get('subject_id'), title, content, link, entry_date, _uid()))
+    db.commit()
+    new_id = cursor.lastrowid
+    db.close()
+    log_action(sid, _uid(), 'ADD_DIARY', f'[{scope}] {title}')
+    return jsonify({'id': new_id, 'message': 'Posted'}), 201
+
+
+@api_admin_bp.route('/diary/<int:entry_id>', methods=['PUT'])
+@login_required(roles=ROLES)
+def update_diary(entry_id):
+    sid = _sid()
+    data = request.get_json(silent=True) or {}
+    db = get_db()
+    entry = db.execute('SELECT * FROM diary_entries WHERE id=? AND school_id=?',
+                       (entry_id, sid)).fetchone()
+    if not entry:
+        db.close()
+        return jsonify({'error': 'Entry not found'}), 404
+    title = (data.get('title') or entry['title']).strip()
+    content = (data.get('content') or entry['content']).strip()
+    link = data.get('link', entry['link'])
+    entry_date = data.get('entry_date', entry['entry_date'])
+    db.execute('''
+        UPDATE diary_entries SET title=?, content=?, link=?, entry_date=?, updated_at=CURRENT_TIMESTAMP
+        WHERE id=? AND school_id=?
+    ''', (title, content, link, entry_date, entry_id, sid))
+    db.commit()
+    db.close()
+    return jsonify({'message': 'Updated'})
+
+
+@api_admin_bp.route('/diary/<int:entry_id>', methods=['DELETE'])
+@login_required(roles=ROLES)
+def delete_diary(entry_id):
+    sid = _sid()
+    db = get_db()
+    entry = db.execute('SELECT title FROM diary_entries WHERE id=? AND school_id=?',
+                       (entry_id, sid)).fetchone()
+    if not entry:
+        db.close()
+        return jsonify({'error': 'Entry not found'}), 404
+    db.execute('DELETE FROM diary_entries WHERE id=? AND school_id=?', (entry_id, sid))
+    db.commit()
+    db.close()
+    log_action(sid, _uid(), 'DELETE_DIARY', entry['title'])
+    return jsonify({'message': 'Deleted'})
+
+
+# ─── FEES: HEADS (per class / academic year) ─────────────────────────────────
+@api_admin_bp.route('/fees/heads', methods=['GET'])
+@login_required(roles=ROLES)
+def list_fee_heads():
+    sid = _sid()
+    class_id = request.args.get('class_id')
+    db = get_db()
+    query = '''
+        SELECT h.id, h.class_id, h.academic_year, h.name, h.amount, h.cycle, h.created_at,
+               c.name AS class_name, c.section
+        FROM fee_heads h
+        JOIN classes c ON c.id = h.class_id
+        WHERE h.school_id=?
+    '''
+    params = [sid]
+    if class_id:
+        query += ' AND h.class_id=?'
+        params.append(class_id)
+    query += ' ORDER BY c.name, c.section, h.cycle, h.name'
+    heads = db.execute(query, params).fetchall()
+    classes = db.execute(
+        "SELECT id, name, section FROM classes WHERE school_id=? ORDER BY name, section",
+        (sid,),
+    ).fetchall()
+    db.close()
+    return jsonify({'heads': _rows(heads), 'classes': _rows(classes)})
+
+
+@api_admin_bp.route('/fees/heads', methods=['POST'])
+@login_required(roles=ROLES)
+def add_fee_head():
+    sid = _sid()
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    class_id = data.get('class_id')
+    cycle = (data.get('cycle') or 'annual').strip()
+    try:
+        amount = float(data.get('amount') or 0)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'amount must be a number'}), 400
+    if not name or not class_id:
+        return jsonify({'error': 'name and class_id are required'}), 400
+    if cycle not in ('annual', 'monthly'):
+        return jsonify({'error': "cycle must be 'annual' or 'monthly'"}), 400
+    if amount < 0:
+        return jsonify({'error': 'amount must be >= 0'}), 400
+
+    db = get_db()
+    # Sanity check: class belongs to this school
+    cls = db.execute('SELECT id, academic_year FROM classes WHERE id=? AND school_id=?',
+                     (class_id, sid)).fetchone()
+    if not cls:
+        db.close()
+        return jsonify({'error': 'Class not found'}), 404
+    academic_year = (data.get('academic_year') or cls['academic_year'] or '').strip() or None
+    cursor = db.execute('''
+        INSERT INTO fee_heads (school_id, class_id, academic_year, name, amount, cycle)
+        VALUES (?,?,?,?,?,?)
+    ''', (sid, class_id, academic_year, name, amount, cycle))
+    db.commit()
+    new_id = cursor.lastrowid
+    db.close()
+    log_action(sid, _uid(), 'ADD_FEE_HEAD', f'{name} ({cycle}) ₹{amount} (api)')
+    return jsonify({'id': new_id, 'message': 'Fee head added'}), 201
+
+
+@api_admin_bp.route('/fees/heads/<int:head_id>', methods=['PUT'])
+@login_required(roles=ROLES)
+def update_fee_head(head_id):
+    sid = _sid()
+    data = request.get_json(silent=True) or {}
+    db = get_db()
+    head = db.execute('SELECT * FROM fee_heads WHERE id=? AND school_id=?',
+                      (head_id, sid)).fetchone()
+    if not head:
+        db.close()
+        return jsonify({'error': 'Fee head not found'}), 404
+    name = (data.get('name') or head['name']).strip()
+    cycle = (data.get('cycle') or head['cycle']).strip()
+    if cycle not in ('annual', 'monthly'):
+        db.close()
+        return jsonify({'error': "cycle must be 'annual' or 'monthly'"}), 400
+    try:
+        amount = float(data.get('amount')) if 'amount' in data else head['amount']
+    except (TypeError, ValueError):
+        db.close()
+        return jsonify({'error': 'amount must be a number'}), 400
+    academic_year = data.get('academic_year', head['academic_year'])
+    db.execute('''
+        UPDATE fee_heads SET name=?, amount=?, cycle=?, academic_year=?
+        WHERE id=? AND school_id=?
+    ''', (name, amount, cycle, academic_year, head_id, sid))
+    db.commit()
+    db.close()
+    log_action(sid, _uid(), 'UPDATE_FEE_HEAD', f'{name} (api)')
+    return jsonify({'message': 'Fee head updated'})
+
+
+@api_admin_bp.route('/fees/heads/<int:head_id>', methods=['DELETE'])
+@login_required(roles=ROLES)
+def delete_fee_head(head_id):
+    sid = _sid()
+    db = get_db()
+    head = db.execute('SELECT name FROM fee_heads WHERE id=? AND school_id=?',
+                      (head_id, sid)).fetchone()
+    if not head:
+        db.close()
+        return jsonify({'error': 'Fee head not found'}), 404
+    paid_count = db.execute('SELECT COUNT(*) c FROM fee_payments WHERE fee_head_id=?',
+                            (head_id,)).fetchone()['c']
+    if paid_count > 0:
+        db.close()
+        return jsonify({'error': f'Cannot delete — {paid_count} payment(s) recorded against this head. Delete payments first.'}), 400
+    db.execute('DELETE FROM fee_heads WHERE id=? AND school_id=?', (head_id, sid))
+    db.commit()
+    db.close()
+    log_action(sid, _uid(), 'DELETE_FEE_HEAD', f"{head['name']} (api)")
+    return jsonify({'message': 'Fee head deleted'})
+
+
+def _months_in_year(academic_year):
+    """Return list of YYYY-MM strings covering an academic year (e.g. '2025-2026' -> Jun 2025 .. May 2026).
+    Falls back to a 12-month window starting at the current month if academic_year is malformed."""
+    try:
+        start_year, _ = academic_year.split('-', 1)
+        start_year = int(start_year)
+        return [f"{start_year + (m >= 12)}-{((m % 12) + 1):02d}" for m in range(5, 17)]  # Jun..May
+    except Exception:
+        today = datetime.date.today()
+        return [f"{today.year + ((today.month - 1 + i) // 12)}-{(((today.month - 1 + i) % 12) + 1):02d}" for i in range(12)]
+
+
+def _student_fee_breakdown(db, sid, student_id):
+    """Compute per-head dues and payments for one student. Returns dict with heads, payments, totals."""
+    # Find student's current class
+    row = db.execute('''
+        SELECT sc.class_id, c.academic_year
+        FROM student_classes sc
+        JOIN classes c ON c.id = sc.class_id
+        WHERE sc.student_id=? AND c.school_id=?
+        LIMIT 1
+    ''', (student_id, sid)).fetchone()
+    if not row:
+        return {'heads': [], 'payments': [], 'totals': {'total': 0, 'paid': 0, 'due': 0}, 'class_id': None}
+
+    class_id = row['class_id']
+    academic_year = row['academic_year']
+    heads = db.execute('''
+        SELECT id, name, amount, cycle, academic_year
+        FROM fee_heads WHERE school_id=? AND class_id=?
+        ORDER BY cycle, name
+    ''', (sid, class_id)).fetchall()
+
+    payments = db.execute('''
+        SELECT p.id, p.fee_head_id, p.month, p.amount, p.paid_date, p.mode, p.receipt_no, p.remarks, p.created_at,
+               h.name AS head_name, h.cycle AS head_cycle,
+               u.name AS collected_by_name
+        FROM fee_payments p
+        JOIN fee_heads h ON h.id = p.fee_head_id
+        LEFT JOIN users u ON u.id = p.collected_by
+        WHERE p.school_id=? AND p.student_id=?
+        ORDER BY p.paid_date DESC, p.id DESC
+    ''', (sid, student_id)).fetchall()
+
+    # Build per-head summary
+    months = _months_in_year(academic_year) if academic_year else _months_in_year('')
+    head_summaries = []
+    grand_total = 0.0
+    grand_paid = 0.0
+    for h in heads:
+        head_dict = dict(h)
+        head_payments = [p for p in payments if p['fee_head_id'] == h['id']]
+        if h['cycle'] == 'monthly':
+            total = float(h['amount']) * 12
+            month_rows = []
+            for m in months:
+                m_paid = sum(float(p['amount']) for p in head_payments if p['month'] == m)
+                month_rows.append({
+                    'month': m,
+                    'amount': float(h['amount']),
+                    'paid': m_paid,
+                    'due': max(0.0, float(h['amount']) - m_paid),
+                    'status': 'paid' if m_paid >= float(h['amount']) else ('partial' if m_paid > 0 else 'pending'),
+                })
+            paid = sum(r['paid'] for r in month_rows)
+            head_dict['months'] = month_rows
+        else:
+            total = float(h['amount'])
+            paid = sum(float(p['amount']) for p in head_payments if (p['month'] is None or p['month'] == ''))
+            head_dict['months'] = None
+        head_dict['amount'] = float(h['amount'])
+        head_dict['total'] = total
+        head_dict['paid'] = paid
+        head_dict['due'] = max(0.0, total - paid)
+        head_dict['status'] = 'paid' if paid >= total else ('partial' if paid > 0 else 'pending')
+        head_summaries.append(head_dict)
+        grand_total += total
+        grand_paid += paid
+
+    return {
+        'heads': head_summaries,
+        'payments': _rows(payments),
+        'class_id': class_id,
+        'academic_year': academic_year,
+        'totals': {
+            'total': grand_total,
+            'paid': grand_paid,
+            'due': max(0.0, grand_total - grand_paid),
+        },
+    }
+
+
+# ─── FEES: STUDENTS LIST WITH DUES SUMMARY ───────────────────────────────────
+@api_admin_bp.route('/fees/students', methods=['GET'])
+@login_required(roles=ROLES)
+def list_fee_students():
+    sid = _sid()
+    class_id = request.args.get('class_id')
+    db = get_db()
+    query = '''
+        SELECT u.id, u.name, u.email, u.phone,
+               c.id AS class_id, c.name AS class_name, c.section, sc.roll_no
+        FROM users u
+        JOIN student_classes sc ON sc.student_id = u.id
+        JOIN classes c ON c.id = sc.class_id
+        WHERE u.school_id=? AND u.role='student' AND u.is_active=1
+    '''
+    params = [sid]
+    if class_id:
+        query += ' AND c.id=?'
+        params.append(class_id)
+    query += ' ORDER BY c.name, c.section, sc.roll_no, u.name'
+    students = db.execute(query, params).fetchall()
+
+    # For each student, compute totals (light query — sums)
+    result = []
+    for s in students:
+        bk = _student_fee_breakdown(db, sid, s['id'])
+        row = dict(s)
+        row['total'] = bk['totals']['total']
+        row['paid'] = bk['totals']['paid']
+        row['due'] = bk['totals']['due']
+        row['status'] = 'paid' if row['due'] <= 0 and row['total'] > 0 else ('partial' if row['paid'] > 0 else ('pending' if row['total'] > 0 else 'no_dues'))
+        result.append(row)
+
+    classes = db.execute(
+        "SELECT id, name, section FROM classes WHERE school_id=? ORDER BY name, section",
+        (sid,),
+    ).fetchall()
+    db.close()
+    return jsonify({'students': result, 'classes': _rows(classes)})
+
+
+@api_admin_bp.route('/fees/students/<int:student_id>', methods=['GET'])
+@login_required(roles=ROLES)
+def fee_student_detail(student_id):
+    sid = _sid()
+    db = get_db()
+    student = db.execute('''
+        SELECT u.id, u.name, u.email, u.phone, u.gender, u.dob, u.address,
+               c.id AS class_id, c.name AS class_name, c.section, c.academic_year, sc.roll_no,
+               sch.name AS school_name, sch.address AS school_address, sch.phone AS school_phone, sch.logo AS school_logo
+        FROM users u
+        LEFT JOIN student_classes sc ON sc.student_id = u.id
+        LEFT JOIN classes c ON c.id = sc.class_id
+        LEFT JOIN schools sch ON sch.id = u.school_id
+        WHERE u.id=? AND u.school_id=? AND u.role='student'
+    ''', (student_id, sid)).fetchone()
+    if not student:
+        db.close()
+        return jsonify({'error': 'Student not found'}), 404
+    breakdown = _student_fee_breakdown(db, sid, student_id)
+    db.close()
+    return jsonify({'student': _row(student), **breakdown})
+
+
+# ─── FEES: RECORD PAYMENT ────────────────────────────────────────────────────
+@api_admin_bp.route('/fees/payments', methods=['POST'])
+@login_required(roles=ROLES)
+def add_fee_payment():
+    sid = _sid()
+    data = request.get_json(silent=True) or {}
+    student_id = data.get('student_id')
+    fee_head_id = data.get('fee_head_id')
+    month = (data.get('month') or '').strip() or None
+    mode = (data.get('mode') or 'cash').strip()
+    paid_date = (data.get('paid_date') or datetime.date.today().isoformat()).strip()
+    remarks = (data.get('remarks') or '').strip() or None
+    try:
+        amount = float(data.get('amount') or 0)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'amount must be a number'}), 400
+    if not student_id or not fee_head_id:
+        return jsonify({'error': 'student_id and fee_head_id are required'}), 400
+    if amount <= 0:
+        return jsonify({'error': 'amount must be greater than 0'}), 400
+    if mode not in ('cash', 'upi', 'cheque', 'card', 'bank_transfer', 'other'):
+        return jsonify({'error': 'invalid mode'}), 400
+
+    db = get_db()
+    # Sanity: student + head belong to this school
+    head = db.execute('SELECT * FROM fee_heads WHERE id=? AND school_id=?',
+                      (fee_head_id, sid)).fetchone()
+    if not head:
+        db.close()
+        return jsonify({'error': 'Fee head not found'}), 404
+    student = db.execute("SELECT id FROM users WHERE id=? AND school_id=? AND role='student'",
+                         (student_id, sid)).fetchone()
+    if not student:
+        db.close()
+        return jsonify({'error': 'Student not found'}), 404
+    if head['cycle'] == 'monthly' and not month:
+        db.close()
+        return jsonify({'error': 'month is required for monthly fee heads (format YYYY-MM)'}), 400
+    if head['cycle'] == 'annual':
+        month = None
+
+    cursor = db.execute('''
+        INSERT INTO fee_payments (school_id, student_id, fee_head_id, month, amount, paid_date, mode, receipt_no, remarks, collected_by)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
+    ''', (sid, student_id, fee_head_id, month, amount, paid_date, mode, None, remarks, _uid()))
+    pid = cursor.lastrowid
+    receipt_no = f"RC-{sid}-{datetime.date.today().strftime('%Y%m%d')}-{pid}"
+    db.execute('UPDATE fee_payments SET receipt_no=? WHERE id=?', (receipt_no, pid))
+    db.commit()
+    payment = db.execute('''
+        SELECT p.*, h.name AS head_name, h.cycle AS head_cycle, u.name AS collected_by_name
+        FROM fee_payments p
+        JOIN fee_heads h ON h.id = p.fee_head_id
+        LEFT JOIN users u ON u.id = p.collected_by
+        WHERE p.id=?
+    ''', (pid,)).fetchone()
+    db.close()
+    log_action(sid, _uid(), 'ADD_FEE_PAYMENT', f'₹{amount} for student #{student_id} head {head["name"]} (receipt {receipt_no})')
+    return jsonify({'payment': _row(payment), 'message': 'Payment recorded'}), 201
+
+
+@api_admin_bp.route('/fees/payments/<int:payment_id>', methods=['DELETE'])
+@login_required(roles=ROLES)
+def delete_fee_payment(payment_id):
+    sid = _sid()
+    db = get_db()
+    p = db.execute('SELECT * FROM fee_payments WHERE id=? AND school_id=?',
+                   (payment_id, sid)).fetchone()
+    if not p:
+        db.close()
+        return jsonify({'error': 'Payment not found'}), 404
+    db.execute('DELETE FROM fee_payments WHERE id=? AND school_id=?', (payment_id, sid))
+    db.commit()
+    db.close()
+    log_action(sid, _uid(), 'DELETE_FEE_PAYMENT', f'Receipt {p["receipt_no"]} (₹{p["amount"]}) reversed (api)')
+    return jsonify({'message': 'Payment reversed'})
+
+
+# ─── FEES: REPORTS (collection + defaulters) ─────────────────────────────────
+@api_admin_bp.route('/fees/reports', methods=['GET'])
+@login_required(roles=ROLES)
+def fee_reports():
+    sid = _sid()
+    db = get_db()
+    today = datetime.date.today()
+    month_start = today.replace(day=1).isoformat()
+    year_start = today.replace(month=1, day=1).isoformat()
+
+    totals = {
+        'today': db.execute(
+            "SELECT COALESCE(SUM(amount),0) v FROM fee_payments WHERE school_id=? AND paid_date=?",
+            (sid, today.isoformat()),
+        ).fetchone()['v'],
+        'this_month': db.execute(
+            "SELECT COALESCE(SUM(amount),0) v FROM fee_payments WHERE school_id=? AND paid_date>=?",
+            (sid, month_start),
+        ).fetchone()['v'],
+        'this_year': db.execute(
+            "SELECT COALESCE(SUM(amount),0) v FROM fee_payments WHERE school_id=? AND paid_date>=?",
+            (sid, year_start),
+        ).fetchone()['v'],
+        'all_time': db.execute(
+            "SELECT COALESCE(SUM(amount),0) v FROM fee_payments WHERE school_id=?",
+            (sid,),
+        ).fetchone()['v'],
+    }
+
+    by_mode = db.execute('''
+        SELECT mode, COUNT(*) AS count, COALESCE(SUM(amount),0) AS total
+        FROM fee_payments WHERE school_id=?
+        GROUP BY mode ORDER BY total DESC
+    ''', (sid,)).fetchall()
+
+    by_class = db.execute('''
+        SELECT c.id, c.name, c.section,
+               COUNT(DISTINCT p.id) AS payment_count,
+               COALESCE(SUM(p.amount),0) AS collected
+        FROM classes c
+        LEFT JOIN fee_heads h ON h.class_id = c.id
+        LEFT JOIN fee_payments p ON p.fee_head_id = h.id
+        WHERE c.school_id=?
+        GROUP BY c.id ORDER BY c.name, c.section
+    ''', (sid,)).fetchall()
+
+    recent = db.execute('''
+        SELECT p.id, p.amount, p.paid_date, p.mode, p.receipt_no,
+               u.name AS student_name, h.name AS head_name,
+               c.name AS class_name, c.section
+        FROM fee_payments p
+        JOIN users u ON u.id = p.student_id
+        JOIN fee_heads h ON h.id = p.fee_head_id
+        LEFT JOIN student_classes sc ON sc.student_id = p.student_id
+        LEFT JOIN classes c ON c.id = sc.class_id
+        WHERE p.school_id=?
+        ORDER BY p.paid_date DESC, p.id DESC LIMIT 20
+    ''', (sid,)).fetchall()
+
+    # Defaulters — compute via _student_fee_breakdown for each active student. May be slow on huge schools;
+    # acceptable for typical SMB scale (a few hundred students).
+    students = db.execute('''
+        SELECT u.id, u.name, u.phone, c.name AS class_name, c.section, sc.roll_no
+        FROM users u
+        JOIN student_classes sc ON sc.student_id = u.id
+        JOIN classes c ON c.id = sc.class_id
+        WHERE u.school_id=? AND u.role='student' AND u.is_active=1
+    ''', (sid,)).fetchall()
+    defaulters = []
+    for s in students:
+        bk = _student_fee_breakdown(db, sid, s['id'])
+        if bk['totals']['due'] > 0:
+            d = dict(s)
+            d['total'] = bk['totals']['total']
+            d['paid'] = bk['totals']['paid']
+            d['due'] = bk['totals']['due']
+            defaulters.append(d)
+    defaulters.sort(key=lambda x: -x['due'])
+
+    db.close()
+    return jsonify({
+        'totals': totals,
+        'by_mode': _rows(by_mode),
+        'by_class': _rows(by_class),
+        'recent': _rows(recent),
+        'defaulters': defaulters[:100],
+    })

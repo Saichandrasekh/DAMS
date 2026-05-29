@@ -90,12 +90,30 @@ export function PromoteClassModal({ open, sourceClass, allClasses, onClose }: Pr
       }),
     onSuccess: (resp) => {
       qc.invalidateQueries({ queryKey: ['admin'] });
-      Swal.fire({
-        icon: 'success',
-        title: resp.message,
-        timer: 2200,
-        showConfirmButton: false,
-      });
+      if (resp.graduated) {
+        Swal.fire({
+          icon: 'success',
+          title: resp.message,
+          html: `
+            <p>The graduated student(s) are no longer visible in active class lists.</p>
+            <p>You can find them under <strong>Batches → Graduated</strong>.</p>
+          `,
+          showCancelButton: true,
+          confirmButtonText: 'View graduated',
+          cancelButtonText: 'OK',
+        }).then((r) => {
+          if (r.isConfirmed) {
+            window.location.assign('/admin/batches');
+          }
+        });
+      } else {
+        Swal.fire({
+          icon: 'success',
+          title: resp.message,
+          timer: 2200,
+          showConfirmButton: false,
+        });
+      }
       onClose();
     },
     onError: (err) => Swal.fire({ icon: 'error', title: 'Promotion failed', text: apiErrorMessage(err) }),

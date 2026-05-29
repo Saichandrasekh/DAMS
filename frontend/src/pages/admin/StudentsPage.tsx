@@ -8,6 +8,39 @@ import { PageHeader } from '@/components/PageHeader';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
 import { Modal } from '@/components/Modal';
 import { apiErrorMessage } from '@/lib/api';
+import type { Student } from '@/types/admin';
+
+const STATUS_BADGE: Record<string, string> = {
+  present: 'badge-success',
+  late: 'badge-warning',
+  absent: 'badge-danger',
+  not_marked: 'badge-neutral',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  present: 'Present',
+  late: 'Late',
+  absent: 'Absent',
+  not_marked: 'Not marked',
+};
+
+function AttendanceCell({ student }: { student: Student }) {
+  const status = student.date_status ?? 'not_marked';
+  const periodCount = student.date_marked ?? 0;
+  return (
+    <div>
+      <span className={`badge ${STATUS_BADGE[status]}`}>{STATUS_LABEL[status]}</span>
+      {periodCount > 0 && (
+        <div className="text-xs text-muted" style={{ marginTop: 4 }}>
+          <span style={{ color: 'var(--success)' }}>{student.date_present ?? 0}P</span>{' / '}
+          <span style={{ color: 'var(--warning)' }}>{student.date_late ?? 0}L</span>{' / '}
+          <span style={{ color: 'var(--danger)' }}>{student.date_absent ?? 0}A</span>
+          <span style={{ marginLeft: 4 }}>across {periodCount} period(s)</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface AddStudentForm {
   name: string;
@@ -23,7 +56,13 @@ interface AddStudentForm {
 
 export function StudentsPage() {
   const qc = useQueryClient();
-  const [filters, setFilters] = useState<{ class_id: string; status: string }>({ class_id: '', status: 'active' });
+  const [filters, setFilters] = useState<{ class_id: string; status: string; date: string }>({
+    class_id: '',
+    status: 'active',
+    date: '',
+  });
+  const [absenteesOnly, setAbsenteesOnly] = useState(false);
+  const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,15 +118,47 @@ export function StudentsPage() {
   if (isLoading) return <LoadingState />;
   if (error) return <ErrorState message={apiErrorMessage(error)} />;
 
-  const students = data?.students ?? [];
+  const allStudents = data?.students ?? [];
   const classes = data?.classes ?? [];
+  const dateOn = filters.date;
+  const q = search.trim().toLowerCase();
+  const students = allStudents
+    .filter((s) =>
+      absenteesOnly && dateOn
+        ? s.date_status === 'absent' || s.date_status === 'not_marked'
+        : true,
+    )
+    .filter((s) =>
+      q
+        ? s.name.toLowerCase().includes(q) ||
+          s.email.toLowerCase().includes(q) ||
+          (s.roll_no ?? '').toLowerCase().includes(q) ||
+          (s.phone ?? '').toLowerCase().includes(q)
+        : true,
+    );
+
+  // Summary counts for the date filter
+  const dateSummary = dateOn
+    ? allStudents.reduce(
+        (acc, s) => {
+          const st = s.date_status ?? 'not_marked';
+          acc[st] = (acc[st] ?? 0) + 1;
+          return acc;
+        },
+        { present: 0, late: 0, absent: 0, not_marked: 0 } as Record<string, number>,
+      )
+    : null;
 
   return (
     <div>
       <PageHeader
         icon="fa-user-graduate"
         title="Students"
-        subtitle={`${students.length} student${students.length === 1 ? '' : 's'}`}
+        subtitle={
+          search || absenteesOnly
+            ? `${students.length} match${students.length === 1 ? '' : 'es'} of ${allStudents.length}`
+            : `${allStudents.length} student${allStudents.length === 1 ? '' : 's'}`
+        }
         actions={
           <>
             <button type="button" className="btn btn-secondary" onClick={() => setImporting(true)}>
@@ -113,6 +184,48 @@ export function StudentsPage() {
       <div className="card" style={{ marginBottom: 16, padding: 16 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           <div>
+            <label className="form-label">Search</label>
+            <div style={{ position: 'relative' }}>
+              <i
+                className="fas fa-magnifying-glass"
+                style={{
+                  position: 'absolute',
+                  left: 12,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-muted)',
+                  fontSize: '0.85rem',
+                }}
+              />
+              <input
+                className="form-control"
+                placeholder="Name, roll, email, phone"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ paddingLeft: 32, paddingRight: search ? 30 : 12 }}
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text-muted)',
+                  }}
+                  aria-label="Clear search"
+                >
+                  <i className="fas fa-times" />
+                </button>
+              )}
+            </div>
+          </div>
+          <div>
             <label className="form-label">Class</label>
             <select className="form-control" value={filters.class_id} onChange={(e) => setFilters((f) => ({ ...f, class_id: e.target.value }))}>
               <option value="">All classes</option>
@@ -129,7 +242,71 @@ export function StudentsPage() {
               <option value="inactive">Inactive (archived)</option>
             </select>
           </div>
+          <div>
+            <label className="form-label">Attendance on date</label>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <input
+                type="date"
+                className="form-control"
+                value={filters.date}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setFilters((f) => ({ ...f, date: e.target.value }))}
+              />
+              {filters.date && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setFilters((f) => ({ ...f, date: '' }));
+                    setAbsenteesOnly(false);
+                  }}
+                  title="Clear date"
+                >
+                  <i className="fas fa-times" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
+
+        {dateOn && dateSummary && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: 10,
+              borderRadius: 8,
+              background: 'var(--background)',
+              display: 'flex',
+              gap: 12,
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              fontSize: '0.9rem',
+            }}
+          >
+            <strong>On {dateOn}:</strong>
+            <span>
+              <span className="badge badge-success">{dateSummary.present} present</span>
+            </span>
+            <span>
+              <span className="badge badge-warning">{dateSummary.late} late</span>
+            </span>
+            <span>
+              <span className="badge badge-danger">{dateSummary.absent} absent</span>
+            </span>
+            <span>
+              <span className="badge badge-neutral">{dateSummary.not_marked} not marked</span>
+            </span>
+            <span style={{ flex: 1 }} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={absenteesOnly}
+                onChange={(e) => setAbsenteesOnly(e.target.checked)}
+              />
+              Show only absentees & not-marked
+            </label>
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -146,6 +323,7 @@ export function StudentsPage() {
                   <th>Roll</th>
                   <th>Phone</th>
                   <th>Status</th>
+                  {dateOn && <th>Attendance on {dateOn}</th>}
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
@@ -160,6 +338,11 @@ export function StudentsPage() {
                     <td>
                       {s.is_active ? <span className="badge badge-success">Active</span> : <span className="badge badge-danger">Archived</span>}
                     </td>
+                    {dateOn && (
+                      <td>
+                        <AttendanceCell student={s} />
+                      </td>
+                    )}
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <Link to={`/admin/students/${s.id}`} className="btn btn-primary btn-sm" title="View full profile">
                         <i className="fas fa-eye" />

@@ -207,20 +207,109 @@ def attendance_report():
 @api_teacher_bp.route('/staff-checkin', methods=['POST'])
 @login_required(roles=ROLES)
 def staff_checkin():
+    """Smart check-in/out:
+    - No row for today          → create with check_in (status=present, late if past cutoff)
+    - Row exists w/o check_out  → set check_out
+    - Row already has check_out → return 409 (already done)
+    """
     sid = _sid()
     uid = _uid()
     today = datetime.date.today().isoformat()
     now = datetime.datetime.now().strftime('%H:%M')
+
     db = get_db()
-    existing = db.execute("SELECT * FROM staff_attendance WHERE staff_id=? AND date=?", (uid, today)).fetchone()
-    if existing:
-        db.execute("UPDATE staff_attendance SET check_out=?, status='present' WHERE staff_id=? AND date=?", (now, uid, today))
-    else:
-        db.execute("INSERT INTO staff_attendance (staff_id, school_id, date, check_in, status, marked_by) VALUES (?,?,?,?,?,?)",
-                   (uid, sid, today, now, 'present', uid))
+    school = db.execute("SELECT late_cutoff_time FROM schools WHERE id=?", (sid,)).fetchone()
+    late_cutoff = school['late_cutoff_time'] if school and school['late_cutoff_time'] else '09:00'
+
+    existing = db.execute(
+        "SELECT * FROM staff_attendance WHERE staff_id=? AND date=?",
+        (uid, today),
+    ).fetchone()
+
+    if not existing:
+        status = 'late' if now > late_cutoff else 'present'
+        db.execute(
+            "INSERT INTO staff_attendance (staff_id, school_id, date, check_in, status, marked_by) VALUES (?,?,?,?,?,?)",
+            (uid, sid, today, now, status, uid),
+        )
+        db.commit()
+        db.close()
+        return jsonify({
+            'action': 'check_in',
+            'message': f'Checked in at {now}' + (' (late)' if status == 'late' else ''),
+            'check_in': now,
+            'check_out': None,
+            'status': status,
+            'date': today,
+        })
+
+    if existing['check_out']:
+        db.close()
+        return jsonify({
+            'error': 'You have already checked out today.',
+            'action': 'already_done',
+            'check_in': existing['check_in'],
+            'check_out': existing['check_out'],
+            'status': existing['status'],
+            'date': today,
+        }), 409
+
+    db.execute(
+        "UPDATE staff_attendance SET check_out=? WHERE staff_id=? AND date=?",
+        (now, uid, today),
+    )
     db.commit()
     db.close()
-    return jsonify({'message': 'Check-in recorded', 'time': now})
+    return jsonify({
+        'action': 'check_out',
+        'message': f'Checked out at {now}',
+        'check_in': existing['check_in'],
+        'check_out': now,
+        'status': existing['status'],
+        'date': today,
+    })
+
+
+@api_teacher_bp.route('/attendance-me', methods=['GET'])
+@login_required(roles=ROLES)
+def my_attendance():
+    """Teacher's own attendance: today's state + recent 30 days history + month summary."""
+    uid = _uid()
+    today = datetime.date.today().isoformat()
+    month_start = datetime.date.today().replace(day=1).isoformat()
+    db = get_db()
+
+    today_row = db.execute(
+        "SELECT * FROM staff_attendance WHERE staff_id=? AND date=?",
+        (uid, today),
+    ).fetchone()
+
+    history = db.execute(
+        '''SELECT date, check_in, check_out, status, remarks
+           FROM staff_attendance WHERE staff_id=?
+           ORDER BY date DESC LIMIT 30''',
+        (uid,),
+    ).fetchall()
+
+    month_summary = db.execute(
+        '''SELECT
+              COUNT(*) AS total_days,
+              SUM(CASE WHEN status='present' THEN 1 ELSE 0 END) AS present,
+              SUM(CASE WHEN status='late' THEN 1 ELSE 0 END) AS late,
+              SUM(CASE WHEN status='absent' THEN 1 ELSE 0 END) AS absent,
+              SUM(CASE WHEN status='on_leave' THEN 1 ELSE 0 END) AS on_leave,
+              SUM(CASE WHEN status='half_day' THEN 1 ELSE 0 END) AS half_day
+           FROM staff_attendance WHERE staff_id=? AND date>=?''',
+        (uid, month_start),
+    ).fetchone()
+
+    db.close()
+    return jsonify({
+        'today': _row(today_row),
+        'history': _rows(history),
+        'month_summary': _row(month_summary) or {},
+        'date': today,
+    })
 
 
 @api_teacher_bp.route('/marks/exams', methods=['GET'])
@@ -308,3 +397,167 @@ def teacher_timetable():
         }
     db.close()
     return jsonify({'periods': school['periods_per_day'] if school else 8, 'data': data})
+
+
+# ─── DIARY ───────────────────────────────────────────────────────────────────
+@api_teacher_bp.route('/diary', methods=['GET'])
+@login_required(roles=ROLES)
+def teacher_list_diary():
+    """List entries the teacher can see: school-wide + any class they teach
+    (or specifically the classes they own as class-teacher / teach a subject in).
+    Filters: scope, class_id, mine (only my posts), from_date, to_date.
+    """
+    sid = _sid()
+    uid = _uid()
+    scope = request.args.get('scope')
+    class_id = request.args.get('class_id', type=int)
+    mine = request.args.get('mine') == '1'
+    from_date = request.args.get('from_date')
+    to_date = request.args.get('to_date')
+
+    db = get_db()
+    # Classes this teacher is associated with (teaches a subject in, or class teacher of)
+    my_classes = db.execute('''
+        SELECT DISTINCT c.id, c.name, c.section
+        FROM classes c
+        LEFT JOIN subjects s ON s.class_id = c.id
+        WHERE c.school_id=? AND (s.teacher_id=? OR c.class_teacher_id=?)
+        ORDER BY c.name, c.section
+    ''', (sid, uid, uid)).fetchall()
+    my_class_ids = [c['id'] for c in my_classes]
+
+    query = '''
+        SELECT d.id, d.scope, d.class_id, d.subject_id, d.title, d.content, d.link,
+               d.entry_date, d.posted_by, d.created_at, d.updated_at,
+               c.name AS class_name, c.section,
+               s.name AS subject_name,
+               u.name AS posted_by_name, u.role AS posted_by_role
+        FROM diary_entries d
+        LEFT JOIN classes c ON c.id = d.class_id
+        LEFT JOIN subjects s ON s.id = d.subject_id
+        LEFT JOIN users u ON u.id = d.posted_by
+        WHERE d.school_id=?
+    '''
+    params = [sid]
+    if mine:
+        query += ' AND d.posted_by=?'
+        params.append(uid)
+    else:
+        # Show school-wide announcements + entries in classes the teacher is associated with
+        if my_class_ids:
+            placeholders = ','.join(['?'] * len(my_class_ids))
+            query += f" AND (d.scope='school' OR d.class_id IN ({placeholders}))"
+            params.extend(my_class_ids)
+        else:
+            query += " AND d.scope='school'"
+    if scope in ('school', 'class'):
+        query += ' AND d.scope=?'
+        params.append(scope)
+    if class_id:
+        query += ' AND d.class_id=?'
+        params.append(class_id)
+    if from_date:
+        query += ' AND d.entry_date>=?'
+        params.append(from_date)
+    if to_date:
+        query += ' AND d.entry_date<=?'
+        params.append(to_date)
+    query += ' ORDER BY d.entry_date DESC, d.id DESC'
+
+    entries = db.execute(query, params).fetchall()
+    db.close()
+    return jsonify({'entries': _rows(entries), 'my_classes': _rows(my_classes)})
+
+
+@api_teacher_bp.route('/diary', methods=['POST'])
+@login_required(roles=ROLES)
+def teacher_add_diary():
+    """Teacher posts a class-level entry. Must specify class_id, must be a class they teach."""
+    sid = _sid()
+    uid = _uid()
+    data = request.get_json(silent=True) or {}
+    class_id = data.get('class_id')
+    title = (data.get('title') or '').strip()
+    content = (data.get('content') or '').strip()
+    if not class_id or not title or not content:
+        return jsonify({'error': 'class_id, title, content are required'}), 400
+
+    db = get_db()
+    # Validate the teacher can post for this class
+    can_post = db.execute('''
+        SELECT 1 FROM classes c
+        LEFT JOIN subjects s ON s.class_id = c.id
+        WHERE c.id=? AND c.school_id=? AND (s.teacher_id=? OR c.class_teacher_id=?)
+        LIMIT 1
+    ''', (class_id, sid, uid, uid)).fetchone()
+    if not can_post:
+        db.close()
+        return jsonify({'error': "You don't teach this class"}), 403
+
+    subject_id = data.get('subject_id')
+    if subject_id:
+        ok = db.execute(
+            'SELECT 1 FROM subjects WHERE id=? AND class_id=? AND teacher_id=?',
+            (subject_id, class_id, uid),
+        ).fetchone()
+        if not ok:
+            db.close()
+            return jsonify({'error': "You don't teach this subject"}), 403
+
+    entry_date = (data.get('entry_date') or datetime.date.today().isoformat()).strip()
+    link = (data.get('link') or '').strip() or None
+
+    cursor = db.execute('''
+        INSERT INTO diary_entries (school_id, scope, class_id, subject_id, title, content, link, entry_date, posted_by)
+        VALUES (?,?,?,?,?,?,?,?,?)
+    ''', (sid, 'class', class_id, subject_id, title, content, link, entry_date, uid))
+    db.commit()
+    new_id = cursor.lastrowid
+    db.close()
+    return jsonify({'id': new_id, 'message': 'Posted'}), 201
+
+
+@api_teacher_bp.route('/diary/<int:entry_id>', methods=['PUT'])
+@login_required(roles=ROLES)
+def teacher_update_diary(entry_id):
+    """Teacher can only edit their own entries."""
+    sid = _sid()
+    uid = _uid()
+    data = request.get_json(silent=True) or {}
+    db = get_db()
+    entry = db.execute(
+        'SELECT * FROM diary_entries WHERE id=? AND school_id=? AND posted_by=?',
+        (entry_id, sid, uid),
+    ).fetchone()
+    if not entry:
+        db.close()
+        return jsonify({'error': "Entry not found or you can't edit it"}), 404
+    title = (data.get('title') or entry['title']).strip()
+    content = (data.get('content') or entry['content']).strip()
+    link = data.get('link', entry['link'])
+    entry_date = data.get('entry_date', entry['entry_date'])
+    db.execute('''
+        UPDATE diary_entries SET title=?, content=?, link=?, entry_date=?, updated_at=CURRENT_TIMESTAMP
+        WHERE id=?
+    ''', (title, content, link, entry_date, entry_id))
+    db.commit()
+    db.close()
+    return jsonify({'message': 'Updated'})
+
+
+@api_teacher_bp.route('/diary/<int:entry_id>', methods=['DELETE'])
+@login_required(roles=ROLES)
+def teacher_delete_diary(entry_id):
+    sid = _sid()
+    uid = _uid()
+    db = get_db()
+    res = db.execute(
+        'DELETE FROM diary_entries WHERE id=? AND school_id=? AND posted_by=?',
+        (entry_id, sid, uid),
+    )
+    db.commit()
+    deleted = res.rowcount
+    db.close()
+    if deleted == 0:
+        return jsonify({'error': "Entry not found or you can't delete it"}), 404
+    return jsonify({'message': 'Deleted'})

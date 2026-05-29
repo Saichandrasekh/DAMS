@@ -8,6 +8,9 @@ import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState'
 import { Modal } from '@/components/Modal';
 import { apiErrorMessage } from '@/lib/api';
 import type { Teacher } from '@/types/admin';
+import { TeachersAttendanceReport } from './TeachersAttendanceReportPage';
+
+type Tab = 'roster' | 'report';
 
 interface TeacherFormValues {
   name: string;
@@ -21,12 +24,14 @@ interface TeacherFormValues {
 
 export function TeachersPage() {
   const qc = useQueryClient();
+  const [tab, setTab] = useState<Tab>('roster');
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Teacher | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin', 'teachers'],
     queryFn: () => adminApi.listTeachers(),
+    enabled: tab === 'roster',
   });
 
   const deleteMutation = useMutation({
@@ -50,9 +55,6 @@ export function TeachersPage() {
     if (r.isConfirmed) deleteMutation.mutate(id);
   };
 
-  if (isLoading) return <LoadingState />;
-  if (error) return <ErrorState message={apiErrorMessage(error)} />;
-
   const teachers = data ?? [];
 
   return (
@@ -60,14 +62,115 @@ export function TeachersPage() {
       <PageHeader
         icon="fa-chalkboard-teacher"
         title="Teachers"
-        subtitle={`${teachers.length} teacher${teachers.length === 1 ? '' : 's'}`}
+        subtitle={
+          tab === 'roster'
+            ? `${teachers.length} teacher${teachers.length === 1 ? '' : 's'}`
+            : 'Per-teacher attendance over a date range'
+        }
         actions={
-          <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
-            <i className="fas fa-plus" /> Add Teacher
-          </button>
+          tab === 'roster' ? (
+            <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+              <i className="fas fa-plus" /> Add Teacher
+            </button>
+          ) : null
         }
       />
 
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid var(--border)' }}>
+        <TabButton active={tab === 'roster'} onClick={() => setTab('roster')} icon="fa-list-ul">
+          Roster
+        </TabButton>
+        <TabButton active={tab === 'report'} onClick={() => setTab('report')} icon="fa-chart-pie">
+          Attendance Report
+        </TabButton>
+      </div>
+
+      {tab === 'report' ? (
+        <TeachersAttendanceReport />
+      ) : (
+        <RosterTab
+          isLoading={isLoading}
+          error={error}
+          teachers={teachers}
+          onEdit={(t) => setEditing(t)}
+          onDelete={handleDelete}
+          deleteIsPending={deleteMutation.isPending}
+        />
+      )}
+      {/* Modals stay outside the tab content */}
+      <Modal open={adding} onClose={() => setAdding(false)} title="Add Teacher">
+        <TeacherForm
+          mode="add"
+          onCancel={() => setAdding(false)}
+          onSuccess={() => { qc.invalidateQueries({ queryKey: ['admin'] }); setAdding(false); }}
+        />
+      </Modal>
+      <Modal open={!!editing} onClose={() => setEditing(null)} title={`Edit ${editing?.name ?? ''}`}>
+        {editing && (
+          <TeacherForm
+            mode="edit"
+            initial={editing}
+            onCancel={() => setEditing(null)}
+            onSuccess={() => { qc.invalidateQueries({ queryKey: ['admin'] }); setEditing(null); }}
+          />
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  icon,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '10px 16px',
+        background: 'none',
+        border: 'none',
+        borderBottom: active ? '2px solid var(--primary)' : '2px solid transparent',
+        color: active ? 'var(--primary)' : 'var(--text-muted)',
+        cursor: 'pointer',
+        fontWeight: active ? 600 : 400,
+        marginBottom: -1,
+      }}
+    >
+      <i className={`fas ${icon}`} style={{ marginRight: 8 }} />
+      {children}
+    </button>
+  );
+}
+
+function RosterTab({
+  isLoading,
+  error,
+  teachers,
+  onEdit,
+  onDelete,
+  deleteIsPending,
+}: {
+  isLoading: boolean;
+  error: unknown;
+  teachers: Teacher[];
+  onEdit: (t: Teacher) => void;
+  onDelete: (id: number, name: string) => void;
+  deleteIsPending: boolean;
+}) {
+  if (isLoading) return <LoadingState />;
+  if (error) return <ErrorState message={apiErrorMessage(error)} />;
+
+  return (
+    <div>
       <div className="card" style={{ padding: 0 }}>
         {teachers.length === 0 ? (
           <EmptyState icon="fa-chalkboard-teacher" title="No teachers" />
@@ -90,17 +193,24 @@ export function TeachersPage() {
                     <td><strong>{t.name}</strong></td>
                     <td>{t.email}</td>
                     <td>{t.phone ?? '—'}</td>
-                    <td>{t.subjects ?? <span className="text-muted">—</span>}</td>
+                    <td>
+                      {t.subjects ?? <span className="text-muted">—</span>}
+                      {t.class_count && t.class_count > 0 && (
+                        <div className="text-xs text-muted" style={{ marginTop: 2 }}>
+                          across {t.class_count} class{t.class_count === 1 ? '' : 'es'}
+                        </div>
+                      )}
+                    </td>
                     <td>{t.is_active ? <span className="badge badge-success">Active</span> : <span className="badge badge-danger">Inactive</span>}</td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing(t)}>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => onEdit(t)}>
                         <i className="fas fa-pen" />
                       </button>{' '}
                       <button
                         type="button"
                         className="btn btn-danger btn-sm"
-                        onClick={() => handleDelete(t.id, t.name)}
-                        disabled={!t.is_active || deleteMutation.isPending}
+                        onClick={() => onDelete(t.id, t.name)}
+                        disabled={!t.is_active || deleteIsPending}
                       >
                         <i className="fas fa-user-slash" />
                       </button>
@@ -112,24 +222,6 @@ export function TeachersPage() {
           </div>
         )}
       </div>
-
-      <Modal open={adding} onClose={() => setAdding(false)} title="Add Teacher">
-        <TeacherForm
-          mode="add"
-          onCancel={() => setAdding(false)}
-          onSuccess={() => { qc.invalidateQueries({ queryKey: ['admin'] }); setAdding(false); }}
-        />
-      </Modal>
-      <Modal open={!!editing} onClose={() => setEditing(null)} title={`Edit ${editing?.name ?? ''}`}>
-        {editing && (
-          <TeacherForm
-            mode="edit"
-            initial={editing}
-            onCancel={() => setEditing(null)}
-            onSuccess={() => { qc.invalidateQueries({ queryKey: ['admin'] }); setEditing(null); }}
-          />
-        )}
-      </Modal>
     </div>
   );
 }
