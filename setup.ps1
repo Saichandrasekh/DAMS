@@ -139,6 +139,14 @@ try {
 } finally { Pop-Location }
 Ok 'Node dependencies installed'
 
+# Root dev tools (SQLite MCP server). Optional - failure is non-fatal.
+Push-Location $root
+try {
+    npm install --no-audit --no-fund --loglevel=error
+    if ($LASTEXITCODE -eq 0) { Ok 'Dev tools installed (SQLite MCP server)' }
+    else { Warn 'dev-tools install failed - MCP server will be unavailable (not required to run DAMS)' }
+} finally { Pop-Location }
+
 # ============================================================
 # 5) Initialize empty database + ask about demo data
 # ============================================================

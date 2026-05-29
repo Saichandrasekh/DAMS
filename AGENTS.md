@@ -51,9 +51,11 @@ Build: `npm run build`.
 ## MCP (optional)
 A project-scoped SQLite MCP server is configured in `.mcp.json` so the agent can
 query `attendance.db` directly instead of writing throwaway scripts.
-- Requires Node (already needed for the frontend) — it runs via `npx mcp-server-sqlite-npx`.
+- It runs as `node node_modules/mcp-server-sqlite-npx/dist/index.js` — the package is a
+  **root dev dependency** (`package.json`), installed by `.\setup.ps1` (or `npm install`
+  at the repo root). Launching via `node` avoids the flaky `npx` reinstall-on-Windows path.
 - The DB must exist first: run `.\setup.ps1` (and seed) before the server connects.
-- Launch the agent from the **repo root** so the `${CLAUDE_PROJECT_DIR:-.}` path resolves.
+- Launch the agent from the **repo root** so the `${CLAUDE_PROJECT_DIR:-.}` paths resolve.
 - Claude Code prompts to approve the project server on first use. Other tools (Codex, etc.)
   configure MCP separately — `.mcp.json` is Claude Code's format.
 - The server can read **and write** the DB; treat writes with care (it's the local dev DB).
