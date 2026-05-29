@@ -48,6 +48,16 @@ Build: `npm run build`.
 - Auth = JWT in the `Authorization` header (12 h expiry). Passwords are bcrypt-hashed; there is no plaintext password column.
 - Excel/PDF exports use `pandas`/`openpyxl`/`reportlab` (already in requirements).
 
+## MCP (optional)
+A project-scoped SQLite MCP server is configured in `.mcp.json` so the agent can
+query `attendance.db` directly instead of writing throwaway scripts.
+- Requires Node (already needed for the frontend) — it runs via `npx mcp-server-sqlite-npx`.
+- The DB must exist first: run `.\setup.ps1` (and seed) before the server connects.
+- Launch the agent from the **repo root** so the `${CLAUDE_PROJECT_DIR:-.}` path resolves.
+- Claude Code prompts to approve the project server on first use. Other tools (Codex, etc.)
+  configure MCP separately — `.mcp.json` is Claude Code's format.
+- The server can read **and write** the DB; treat writes with care (it's the local dev DB).
+
 ## Workflow for a new contributor
 Branch off `main` (`git checkout -b <feature>`), build, push the branch, open a PR.
 New modules (new files) are low-risk; edits to shared files (`App.tsx`, `api_admin.py`,
